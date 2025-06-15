@@ -536,7 +536,6 @@
     }
 
     function drawAllArrows() {
-      clearArrowCanvas();
       const lightGreen = [120, 255, 120];
       const darkGreen = [0, 100, 0];
       arrows.forEach(([fromEl, toEl, curveSeed], i) => {
@@ -558,7 +557,6 @@
     }
 
     function drawArrow(fromEl, toEl, clear = false, color = '#0f0', curveSeed = 0) {
-      if (clear) clearArrowCanvas();
       if (!fromEl || !toEl) return;
       const fromRect = fromEl.getBoundingClientRect();
       const toRect = toEl.getBoundingClientRect();
@@ -611,8 +609,6 @@
       // Remove highlight from all labels
       document.querySelectorAll('.label').forEach(unhighlightLabel);
       arrowLabels = [];
-      // Don't clear arrows array here
-      clearArrowCanvas();
     }
 
     function arrowLabelClick(e) {
@@ -624,7 +620,6 @@
         arrowFrom = null;
         document.querySelectorAll('.label').forEach(unhighlightLabel);
         arrowLabels = [];
-        clearArrowCanvas();
         // Redraw existing arrows
         drawAllArrows();
 
@@ -801,8 +796,8 @@
     // Clear all drawings
     document.getElementById('clear-drawings').onclick = function() {
       arrows = [];
+      clearArrowCanvas();
       drawLabels();
-      drawAllArrows();
     };
 
     // When clicking a label in drawing mode, add an arrow
