@@ -56,8 +56,8 @@
     .separator {
       position: absolute;
       width: 1px;
-      height: 190px;
-      top: 0;
+      height: 165px;
+      top: 7%;
       left: 50%;
       background: black;
       transform-origin: bottom center;
@@ -102,15 +102,22 @@
     <!-- Red overlay (HTML/CSS only) -->
     <canvas id="red-canvas" width="380" height="380"></canvas>
   </div>
+  <button id="toggle-labels" style="margin-top: 10px;">Show Roman Numerals</button>
   <div id="info">Click any chord to see its name.</div>
 
   <script>
-    const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
+    const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb/F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
     const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
-    const dims   = ['Bdim','F♯dim','C♯dim','G♯dim','D♯dim','A♯dim','E♯dim','Ddim','Adim','Edim','Bd♭dim','Fd♭dim'];
+    const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','D°','A°','E°','Bd♭°','Fd♭°'];
+
+    const majors_roman = ['I', 'V', 'II', 'VI', 'III', 'VII', 'bV', 'bII', 'bVI', 'bIII', 'bVII', 'IV'];
+    const minors_roman = ['vi', 'iii', 'vii', 'iv#', 'i#', 'vi#', 'biii', 'bvii', 'iv', 'i', 'v', 'ii'];
+    const dims_roman = ['vii°', 'iv#°', 'i#°', 'v#°', 'vi#°', 'biii°', 'bvii°', 'iv°', 'i°', 'v°', 'ii°', 'vi°', 'iii°'];
 
     const circle = document.getElementById('circle');
     const info = document.getElementById('info');
+    const toggleBtn = document.getElementById('toggle-labels');
+    let useRoman = false;
 
     function polarToCartesian(cx, cy, r, angleDeg) {
       const rad = (angleDeg - 90) * Math.PI / 180;
@@ -120,29 +127,37 @@
     const center = 190;
     const radii = { major: 150, minor: 110, dim: 70 };
 
-    majors.forEach((_, i) => {
-      const angle = i * 30;
+    function drawLabels() {
+      // Remove old labels
+      Array.from(document.querySelectorAll('.label')).forEach(el => el.remove());
+      majors.forEach((_, i) => {
+        const angle = i * 30;
+        const addLabel = (text, radius, className) => {
+          const pos = polarToCartesian(center, center, radius, angle);
+          const el = document.createElement('div');
+          el.className = `label ${className}`;
+          el.style.left = pos.x + 'px';
+          el.style.top = pos.y + 'px';
+          el.textContent = text;
+          el.onclick = () => info.textContent = `${text} chord`;
+          circle.appendChild(el);
+        };
+        addLabel(useRoman ? majors_roman[i] : majors[i], radii.major, 'major');
+        addLabel(useRoman ? minors_roman[i] : minors[i], radii.minor, 'minor');
+        addLabel(useRoman ? dims_roman[i] : dims[i], radii.dim, 'dim');
+        const line = document.createElement('div');
+        line.className = 'separator';
+        line.style.transform = `rotate(${angle + 15}deg)`;
+        circle.appendChild(line);
+      });
+    }
+    drawLabels();
 
-      const addLabel = (text, radius, className) => {
-        const pos = polarToCartesian(center, center, radius, angle);
-        const el = document.createElement('div');
-        el.className = `label ${className}`;
-        el.style.left = pos.x + 'px';
-        el.style.top = pos.y + 'px';
-        el.textContent = text;
-        el.onclick = () => info.textContent = `${text} chord`;
-        circle.appendChild(el);
-      };
-
-      addLabel(majors[i], radii.major, 'major');
-      addLabel(minors[i], radii.minor, 'minor');
-      addLabel(dims[i], radii.dim, 'dim');
-
-      const line = document.createElement('div');
-      line.className = 'separator';
-      line.style.transform = `rotate(${angle + 15}deg)`;
-      circle.appendChild(line);
-    });
+    toggleBtn.onclick = function() {
+      useRoman = !useRoman;
+      toggleBtn.textContent = useRoman ? 'Show Normal Labels' : 'Show Roman Numerals';
+      drawLabels();
+    };
 
     // --- Red Overlay Logic ---
     const redCanvas = document.getElementById('red-canvas');
@@ -150,7 +165,7 @@
     // Configurable: number of segments to cover (e.g., 5 for F-C-G)
     let coveredSegments = 3;
     // Configurable: which segment to start at (0 = C, 1 = G, ...)
-    let startSegment = 0;
+    let startSegment = -1;
     // Number of total segments (12 for circle of fifths)
     const totalSegments = 12;
     // Arc radii (match your visual layers)
