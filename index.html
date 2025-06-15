@@ -497,6 +497,23 @@
         drawAllArrows();
       }
     }
+
+    // Make dropdowns scrollable with mouse wheel
+    function makeDropdownScrollable(select) {
+      select.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = Math.sign(e.deltaY);
+        let newIdx = select.selectedIndex + delta;
+        if (newIdx < 0) newIdx = select.options.length - 1;
+        if (newIdx >= select.options.length) newIdx = 0;
+        if (newIdx !== select.selectedIndex) {
+          select.selectedIndex = newIdx;
+          select.dispatchEvent(new Event('change'));
+        }
+      }, { passive: false });
+    }
+    makeDropdownScrollable(modeSelect);
+    makeDropdownScrollable(keySelect);
   </script>
 </body>
 </html>
