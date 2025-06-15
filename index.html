@@ -268,6 +268,7 @@
       currentKey = keySelect.value;
       updatePolygonForKeyAndMode();
       drawLabels();
+      drawAllArrows();
     };
 
     function polarToCartesian(cx, cy, r, angleDeg) {
@@ -366,17 +367,22 @@
         drawArrowMode = false;
         drawNormal.classList.add('active');
         drawDrawing.classList.remove('active');
-        resetArrowMode();
         const redCanvas = document.getElementById('red-canvas');
         if (redCanvas) redCanvas.style.pointerEvents = 'auto';
         document.querySelectorAll('.label').forEach(label => {
           label.style.cursor = '';
           label.removeEventListener('click', arrowLabelClick, {capture: true});
         });
-        resetArrowMode();
-        if (arrowCanvas) arrowCanvas.remove();
-        arrowCanvas = null;
-        arrowCtx = null;
+        // Don't remove the canvas, just hide it
+        if (arrowCanvas) {
+          // arrowCanvas.style.display = 'none';
+        }
+        // Reset drawing state but keep arrows
+        arrowStep = 0;
+        arrowFrom = null;
+        document.querySelectorAll('.label').forEach(unhighlightLabel);
+        arrowLabels = [];
+        clearArrowCanvas();
       }
     };
     drawDrawing.onclick = function() {
@@ -384,14 +390,20 @@
         drawArrowMode = true;
         drawNormal.classList.remove('active');
         drawDrawing.classList.add('active');
-        resetArrowMode();
         const redCanvas = document.getElementById('red-canvas');
         if (redCanvas) redCanvas.style.pointerEvents = 'none';
-        createArrowCanvas();
+        // Create or show the canvas
+        if (!arrowCanvas) {
+          createArrowCanvas();
+        } else {
+          arrowCanvas.style.display = 'block';
+        }
         document.querySelectorAll('.label').forEach(label => {
           label.style.cursor = 'pointer';
           label.addEventListener('click', arrowLabelClick, {capture: true});
         });
+        // Redraw all arrows
+        drawAllArrows();
       }
     };
 
@@ -473,6 +485,7 @@
         startSegment = newStart;
         drawBothPolygons();
         drawLabels();
+        drawAllArrows();
         updateKeyDropdownFromPolygon();
       }
     });
@@ -598,7 +611,7 @@
       // Remove highlight from all labels
       document.querySelectorAll('.label').forEach(unhighlightLabel);
       arrowLabels = [];
-      arrows = [];
+      // Don't clear arrows array here
       clearArrowCanvas();
     }
 
@@ -606,7 +619,15 @@
       e.stopPropagation();
       const label = e.currentTarget;
       if (arrowStep === 0) {
-        resetArrowMode();
+        // Only reset the drawing state, not the arrows
+        arrowStep = 0;
+        arrowFrom = null;
+        document.querySelectorAll('.label').forEach(unhighlightLabel);
+        arrowLabels = [];
+        clearArrowCanvas();
+        // Redraw existing arrows
+        drawAllArrows();
+
         highlightLabel(label);
         arrowLabels = [label];
         arrowFrom = label;
@@ -689,6 +710,7 @@
       currentKey = keySelect.value;
       updatePolygonForKeyAndMode();
       drawLabels();
+      drawAllArrows();
     };
 
     // When mode changes, update polygon (key stays the same)
@@ -696,6 +718,7 @@
       currentModeIndex = modeSelect.selectedIndex;
       updatePolygonForKeyAndMode();
       drawLabels();
+      drawAllArrows();
     };
 
     // When dragging ends, update key dropdown and polygon (mode stays the same)
@@ -712,6 +735,7 @@
       // After changing key, update polygon for current mode
       updatePolygonForKeyAndMode();
       drawLabels();
+      drawAllArrows();
     }
 
     // Patch drag logic to update key dropdown and polygon (mode stays the same)
@@ -745,6 +769,7 @@
         startSegment = newStart;
         drawBothPolygons();
         drawLabels();
+        drawAllArrows();
         updateKeyDropdownFromPolygon();
       }
     });
@@ -767,6 +792,7 @@
       drawRedOverlay(ionianStartSegment-3, 9, 'blue', 7, true);
       // Draw red polygon on top
       drawRedOverlay(startSegment, 3, 'red', 1);
+      drawAllArrows();
     }
 
     // Initial draw of both polygons
@@ -776,6 +802,7 @@
     document.getElementById('clear-drawings').onclick = function() {
       arrows = [];
       drawLabels();
+      drawAllArrows();
     };
 
     // When clicking a label in drawing mode, add an arrow
@@ -786,6 +813,7 @@
       arrows.push({ from: { key, mode } });
       if (arrows.length === 2) {
         drawLabels(); // Redraw with the new arrow
+        drawAllArrows();
         arrows = []; // Reset for next arrow
       }
     }
