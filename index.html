@@ -165,8 +165,8 @@
       <span id="roman-roman">Roman numerals</span>
     </div>
     <div id="draw-toggle" class="toggle-switch">
-      <span id="draw-normal" class="active">Normal Mode</span>
-      <span id="draw-drawing">Drawing Mode</span>
+      <span id="draw-normal" class="active">Transpose Key</span>
+      <span id="draw-drawing">Draw Chord Progression</span>
     </div>
   </div>
   <div id="info">Click any chord to see its name.</div>
@@ -445,6 +445,7 @@
         startSegment = newStart;
         drawBothPolygons();
         drawLabels();
+        updateKeyDropdownFromPolygon();
       }
     });
     document.addEventListener('mouseup', () => {
@@ -716,6 +717,7 @@
         startSegment = newStart;
         drawBothPolygons();
         drawLabels();
+        updateKeyDropdownFromPolygon();
       }
     });
 
