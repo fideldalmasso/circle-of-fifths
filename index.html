@@ -83,6 +83,16 @@
     #red-canvas.dragging {
       cursor: grabbing;
     }
+
+    /* Highlighted key label */
+    .highlighted-key {
+      border: 2.5px dotted #222;
+      border-radius: 50%;
+      padding: 4px 8px;
+      background: #fff8;
+      box-shadow: 0 0 0 4px #fff8;
+      z-index: 22;
+    }
   </style>
 </head>
 <body>
@@ -134,6 +144,30 @@
   <div id="info">Click any chord to see its name.</div>
 
   <script>
+    // --- Key Mapping Setup (define at the very top) ---
+    const keyToStartSegment = {
+      'C': -1,
+      'G': 0,
+      'D': 1,
+      'A': 2,
+      'E': 3,
+      'B': 4,
+      'Gb': 5,
+      'Db': 6,
+      'Ab': 7,
+      'Eb': 8,
+      'Bb': 9,
+      'F': 10
+    };
+    const startSegmentToKey = [
+      'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C'
+    ];
+
+    // --- Mode and Key Setup (define at the very top) ---
+    const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
+    // Offsets relative to Ionian (0): Lydian +1, Ionian 0, Mixolydian -1, Dorian -2, Aeolian -3, Phrygian -4, Locrian -5
+    const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
+
     // coveredSegments and startSegment are declared at the top
     let coveredSegments = 3;
     let startSegment = -1;
@@ -170,7 +204,8 @@
     };
     keySelect.onchange = function() {
       currentKey = keySelect.value;
-      // Future: update circle based on key
+      updatePolygonForKeyAndMode();
+      drawLabels();
     };
 
     function polarToCartesian(cx, cy, r, angleDeg) {
@@ -184,21 +219,29 @@
     function drawLabels() {
       // Remove old labels
       Array.from(document.querySelectorAll('.label')).forEach(el => el.remove());
+      // Robust: check modeOrder and modeOffsets
+      if (!modeOrder || !modeOffsets || typeof modeSelect.selectedIndex !== 'number') return;
+      // Determine which label to highlight
+      const keyIdx = keyToStartSegment.hasOwnProperty(currentKey) ? (keyToStartSegment[currentKey] === -1 ? 11 : keyToStartSegment[currentKey]) : 0;
+      const modeOffset = modeOffsets[modeSelect.selectedIndex] || 0;
+      let highlightIdx = (keyIdx + modeOffset + 1 + 12) % 12;
+      const majorModes = ['Lydian', 'Ionian', 'Mixolydian'];
+      const isMajor = majorModes.includes(modeOrder[modeSelect.selectedIndex]);
       majors.forEach((_, i) => {
         const angle = i * 30;
-        const addLabel = (text, radius, className) => {
+        const addLabel = (text, radius, className, highlight) => {
           const pos = polarToCartesian(center, center, radius, angle);
           const el = document.createElement('div');
-          el.className = `label ${className}`;
+          el.className = `label ${className}` + (highlight ? ' highlighted-key' : '');
           el.style.left = pos.x + 'px';
           el.style.top = pos.y + 'px';
           el.textContent = text;
           el.onclick = () => info.textContent = `${text} chord`;
           circle.appendChild(el);
         };
-        addLabel(useRoman ? majors_roman[i] : majors[i], radii.major, 'major');
-        addLabel(useRoman ? minors_roman[i] : minors[i], radii.minor, 'minor');
-        addLabel(useRoman ? dims_roman[i] : dims[i], radii.dim, 'dim');
+        addLabel(useRoman ? majors_roman[i] : majors[i], radii.major, 'major', isMajor && i === highlightIdx);
+        addLabel(useRoman ? minors_roman[i] : minors[i], radii.minor, 'minor', !isMajor && i === highlightIdx);
+        addLabel(useRoman ? dims_roman[i] : dims[i], radii.dim, 'dim', false);
         const line = document.createElement('div');
         line.className = 'separator';
         line.style.transform = `rotate(${angle + 15}deg)`;
@@ -520,37 +563,11 @@
     makeDropdownScrollable(modeSelect);
     makeDropdownScrollable(keySelect);
 
-    // --- Key <-> Polygon Sync ---
-    // Custom mapping: key to startSegment
-    const keyToStartSegment = {
-      'C': -1,
-      'G': 0,
-      'D': 1,
-      'A': 2,
-      'E': 3,
-      'B': 4,
-      'Gb': 5,
-      'Db': 6,
-      'Ab': 7,
-      'Eb': 8,
-      'Bb': 9,
-      'F': 10
-    };
-    // Reverse mapping: startSegment to key
-    const startSegmentToKey = [
-      'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C'
-    ];
-
-    // Set default key and polygon after all functions are defined
-    keySelect.value = 'C';
-    currentKey = 'C';
-    drawRedOverlay();
-
     // --- Mode Offset Logic ---
     // Mode order as in the dropdown
-    const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
-    // Offsets relative to Ionian (0): Lydian -1, Ionian 0, Mixolydian +1, Dorian +2, Aeolian +3, Phrygian +4, Locrian +5
-    const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
+    // const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
+    // // Offsets relative to Ionian (0): Lydian -1, Ionian 0, Mixolydian +1, Dorian +2, Aeolian +3, Phrygian +4, Locrian +5
+    // const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
     // Set default mode to Ionian (index 1)
     modeSelect.selectedIndex = 1;
     let currentModeIndex = 1;
@@ -579,6 +596,7 @@
     keySelect.onchange = function() {
       currentKey = keySelect.value;
       updatePolygonForKeyAndMode();
+      drawLabels();
     };
 
     // When mode changes, update polygon (key stays the same)
@@ -600,6 +618,7 @@
       currentKey = key;
       // After changing key, update polygon for current mode
       updatePolygonForKeyAndMode();
+      drawLabels();
     }
 
     // Patch drag logic to update key dropdown and polygon (mode stays the same)
