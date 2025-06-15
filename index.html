@@ -297,6 +297,10 @@
       const isMajor = majorModes.includes(modeOrder[modeSelect.selectedIndex]);
       const modeOffset = isMajor ? 0 : -3;
       let highlightIdx = (keyIdx + modeOffset + 1 + 12) % 12;
+
+      // Get rotation offset based on key position (reversed direction)
+      const rotationOffset = (12 - keySelect.selectedIndex) % 12;
+
       majors.forEach((_, i) => {
         const angle = i * 30;
         const addLabel = (text, radius, className, highlight) => {
@@ -305,7 +309,21 @@
           el.className = `label ${className}` + (highlight ? ' highlighted-key' : '');
           el.style.left = pos.x + 'px';
           el.style.top = pos.y + 'px';
-          el.textContent = text;
+
+          // Rotate Roman numerals based on key position
+          if (useRoman) {
+            const rotatedIdx = (i + rotationOffset) % 12;
+            if (className === 'major') {
+              el.textContent = majors_roman[rotatedIdx];
+            } else if (className === 'minor') {
+              el.textContent = minors_roman[rotatedIdx];
+            } else {
+              el.textContent = dims_roman[rotatedIdx];
+            }
+          } else {
+            el.textContent = text;
+          }
+
           el.onclick = () => info.textContent = `${text} chord`;
           circle.appendChild(el);
         };
