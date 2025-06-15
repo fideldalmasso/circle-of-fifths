@@ -417,15 +417,6 @@
       ctx.restore();
     }
 
-    function drawBothPolygons() {
-      // Clear canvas once before drawing both polygons
-      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
-      // Draw blue polygon first (so it appears behind)
-      drawRedOverlay(startSegment-5, 9, 'gray', 7);
-      // Draw red polygon on top
-      drawRedOverlay(startSegment, 3, 'red', 1);
-    }
-    drawBothPolygons();
     // --- Drag to rotate (snapping) ---
     let isDragging = false;
     let dragStartX = 0;
@@ -729,6 +720,23 @@
 
     // Draw labels at startup only (and when toggling Roman numerals)
     drawLabels();
+
+    function drawBothPolygons() {
+      // Clear canvas once before drawing both polygons
+      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+      // Calculate Lydian start segment for current key
+      let ionianStartSegment = startSegment;
+      // Adjust to Lydian position (mode index 3)
+      ionianStartSegment = (startSegment - modeOffsets[currentModeIndex] + modeOffsets[3] + 12) % 12;
+      if (ionianStartSegment > 10) ionianStartSegment -= 12;
+      // Draw blue polygon first (so it appears behind)
+      drawRedOverlay(ionianStartSegment-3, 9, 'gray', 7);
+      // Draw red polygon on top
+      drawRedOverlay(startSegment, 3, 'red', 1);
+    }
+
+    // Initial draw of both polygons
+    drawBothPolygons();
   </script>
 </body>
 </html>
