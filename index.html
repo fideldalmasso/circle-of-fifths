@@ -93,6 +93,26 @@
       box-shadow: 0 0 0 4px #fff8;
       z-index: 22;
     }
+
+    .toggle-switch {
+      display: inline-flex;
+      border-radius: 20px;
+      background: #eee;
+      border: 1.5px solid #bbb;
+      overflow: hidden;
+      font-size: 1em;
+      user-select: none;
+    }
+    .toggle-switch span {
+      padding: 6px 16px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      color: #444;
+    }
+    .toggle-switch .active {
+      background: #444;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -139,8 +159,16 @@
     <!-- Red overlay (HTML/CSS only) -->
     <canvas id="red-canvas" width="380" height="380"></canvas>
   </div>
-  <button id="toggle-labels" style="margin-top: 10px;">Show Roman Numerals</button>
-  <button id="draw-arrow-mode" style="margin-top: 10px;">Draw Arrow by Steps</button>
+  <div style="margin-top: 10px; display: flex; gap: 30px; align-items: center;">
+    <div id="roman-toggle" class="toggle-switch">
+      <span id="roman-chords" class="active">Chords/Keys</span>
+      <span id="roman-roman">Roman numerals</span>
+    </div>
+    <div id="draw-toggle" class="toggle-switch">
+      <span id="draw-normal" class="active">Normal Mode</span>
+      <span id="draw-drawing">Drawing Mode</span>
+    </div>
+  </div>
   <div id="info">Click any chord to see its name.</div>
 
   <script>
@@ -182,8 +210,14 @@
 
     const circle = document.getElementById('circle');
     const info = document.getElementById('info');
-    const toggleBtn = document.getElementById('toggle-labels');
-    const drawArrowBtn = document.getElementById('draw-arrow-mode');
+    // Roman numerals toggle
+    const romanToggle = document.getElementById('roman-toggle');
+    const romanChords = document.getElementById('roman-chords');
+    const romanRoman = document.getElementById('roman-roman');
+    // Drawing mode toggle
+    const drawToggle = document.getElementById('draw-toggle');
+    const drawNormal = document.getElementById('draw-normal');
+    const drawDrawing = document.getElementById('draw-drawing');
     let useRoman = false;
     let drawArrowMode = false;
     let arrowStep = 0;
@@ -250,28 +284,87 @@
     }
     drawLabels();
 
-    toggleBtn.onclick = function() {
-      useRoman = !useRoman;
-      toggleBtn.textContent = useRoman ? 'Show Normal Labels' : 'Show Roman Numerals';
-      // Save current highlighted labels and arrows
-      let highlighted = [];
-      document.querySelectorAll('.label').forEach((el, i) => {
-        if (el.style.boxShadow) highlighted.push(i);
-      });
-      // Save arrow label indices
-      let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
+    // Roman numerals toggle logic
+    romanChords.onclick = function() {
+      if (useRoman) {
+        useRoman = false;
+        romanChords.classList.add('active');
+        romanRoman.classList.remove('active');
+        // Save current highlighted labels and arrows
+        let highlighted = [];
+        document.querySelectorAll('.label').forEach((el, i) => {
+          if (el.style.boxShadow) highlighted.push(i);
+        });
+        let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
+          const allLabels = Array.from(document.querySelectorAll('.label'));
+          return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
+        });
+        drawLabels();
         const allLabels = Array.from(document.querySelectorAll('.label'));
-        return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
-      });
-      drawLabels();
-      // Restore highlights
-      const allLabels = Array.from(document.querySelectorAll('.label'));
-      highlighted.forEach(i => {
-        if (allLabels[i]) highlightLabel(allLabels[i]);
-      });
-      // Restore arrows
-      arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
-      drawAllArrows();
+        highlighted.forEach(i => {
+          if (allLabels[i]) highlightLabel(allLabels[i]);
+        });
+        arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
+        drawAllArrows();
+      }
+    };
+    romanRoman.onclick = function() {
+      if (!useRoman) {
+        useRoman = true;
+        romanChords.classList.remove('active');
+        romanRoman.classList.add('active');
+        // Save current highlighted labels and arrows
+        let highlighted = [];
+        document.querySelectorAll('.label').forEach((el, i) => {
+          if (el.style.boxShadow) highlighted.push(i);
+        });
+        let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
+          const allLabels = Array.from(document.querySelectorAll('.label'));
+          return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
+        });
+        drawLabels();
+        const allLabels = Array.from(document.querySelectorAll('.label'));
+        highlighted.forEach(i => {
+          if (allLabels[i]) highlightLabel(allLabels[i]);
+        });
+        arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
+        drawAllArrows();
+      }
+    };
+
+    // Drawing mode toggle logic
+    drawNormal.onclick = function() {
+      if (drawArrowMode) {
+        drawArrowMode = false;
+        drawNormal.classList.add('active');
+        drawDrawing.classList.remove('active');
+        resetArrowMode();
+        const redCanvas = document.getElementById('red-canvas');
+        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
+        document.querySelectorAll('.label').forEach(label => {
+          label.style.cursor = '';
+          label.removeEventListener('click', arrowLabelClick, {capture: true});
+        });
+        resetArrowMode();
+        if (arrowCanvas) arrowCanvas.remove();
+        arrowCanvas = null;
+        arrowCtx = null;
+      }
+    };
+    drawDrawing.onclick = function() {
+      if (!drawArrowMode) {
+        drawArrowMode = true;
+        drawNormal.classList.remove('active');
+        drawDrawing.classList.add('active');
+        resetArrowMode();
+        const redCanvas = document.getElementById('red-canvas');
+        if (redCanvas) redCanvas.style.pointerEvents = 'none';
+        createArrowCanvas();
+        document.querySelectorAll('.label').forEach(label => {
+          label.style.cursor = 'pointer';
+          label.addEventListener('click', arrowLabelClick, {capture: true});
+        });
+      }
     };
 
     // --- Red Overlay Logic ---
@@ -477,39 +570,6 @@
       arrows = [];
       clearArrowCanvas();
     }
-
-    drawArrowBtn.onclick = function() {
-      drawArrowMode = !drawArrowMode;
-      drawArrowBtn.textContent = drawArrowMode ? 'Cancel Arrow Drawing' : 'Draw Arrow by Steps';
-      resetArrowMode();
-      // Toggle pointer events on the red overlay canvas
-      const redCanvas = document.getElementById('red-canvas');
-      if (drawArrowMode) {
-        if (redCanvas) redCanvas.style.pointerEvents = 'none';
-      } else {
-        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
-      }
-      if (drawArrowMode) {
-        createArrowCanvas();
-        // Add click listeners to labels
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = 'pointer';
-          label.addEventListener('click', arrowLabelClick, {capture: true});
-        });
-      } else {
-        // Remove listeners and highlights
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = '';
-          label.removeEventListener('click', arrowLabelClick, {capture: true});
-        });
-        resetArrowMode();
-        if (arrowCanvas) arrowCanvas.remove();
-        arrowCanvas = null;
-        arrowCtx = null;
-        // Restore pointer events for red overlay canvas
-        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
-      }
-    };
 
     function arrowLabelClick(e) {
       e.stopPropagation();
