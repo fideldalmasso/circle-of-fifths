@@ -174,7 +174,7 @@
 
     const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb/F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
     const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
-    const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','D°','A°','E°','Bd♭°','Fd♭°'];
+    const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','C°','G°','D°','A°','E°'];
 
     const majors_roman = ['I', 'V', 'II', 'VI', 'III', 'VII', 'bV', 'bII', 'bVI', 'bIII', 'bVII', 'IV'];
     const minors_roman = ['vi', 'iii', 'vii', 'iv#', 'i#', 'vi#', 'biii', 'bvii', 'iv', 'i', 'v', 'ii'];
@@ -223,10 +223,10 @@
       if (!modeOrder || !modeOffsets || typeof modeSelect.selectedIndex !== 'number') return;
       // Determine which label to highlight
       const keyIdx = keyToStartSegment.hasOwnProperty(currentKey) ? (keyToStartSegment[currentKey] === -1 ? 11 : keyToStartSegment[currentKey]) : 0;
-      const modeOffset = modeOffsets[modeSelect.selectedIndex] || 0;
-      let highlightIdx = (keyIdx + modeOffset + 1 + 12) % 12;
       const majorModes = ['Lydian', 'Ionian', 'Mixolydian'];
       const isMajor = majorModes.includes(modeOrder[modeSelect.selectedIndex]);
+      const modeOffset = isMajor ? 0 : -3;
+      let highlightIdx = (keyIdx + modeOffset + 1 + 12) % 12;
       majors.forEach((_, i) => {
         const angle = i * 30;
         const addLabel = (text, radius, className, highlight) => {
@@ -349,6 +349,7 @@
       if (newStart !== startSegment) {
         startSegment = newStart;
         drawRedOverlay();
+        drawLabels();
       }
     });
     document.addEventListener('mouseup', () => {
@@ -603,6 +604,7 @@
     modeSelect.onchange = function() {
       currentModeIndex = modeSelect.selectedIndex;
       updatePolygonForKeyAndMode();
+      drawLabels();
     };
 
     // When dragging ends, update key dropdown and polygon (mode stays the same)
@@ -651,6 +653,7 @@
       if (newStart !== startSegment) {
         startSegment = newStart;
         drawRedOverlay();
+        drawLabels();
       }
     });
 
