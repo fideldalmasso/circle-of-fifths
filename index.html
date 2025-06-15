@@ -90,12 +90,12 @@
   <div style="margin-bottom: 10px;">
     <label for="mode-select">Mode: </label>
     <select id="mode-select">
-      <option>Ionian</option>
-      <option>Dorian</option>
-      <option>Phrygian</option>
       <option>Lydian</option>
+      <option>Ionian</option>
       <option>Mixolydian</option>
+      <option>Dorian</option>
       <option>Aeolian</option>
+      <option>Phrygian</option>
       <option>Locrian</option>
     </select>
     <label for="key-select" style="margin-left: 20px;">Key: </label>
@@ -297,10 +297,12 @@
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
       const dx = e.clientX - dragStartX;
-      // 1 full circle = 360px (approx for 380px circle), so 30deg = 30px
       const pxPerSegment = 380 / totalSegments;
       let deltaSegments = Math.round(dx / pxPerSegment);
-      let newStart = (dragStartSegment + deltaSegments + totalSegments) % totalSegments;
+      let newStart = (dragStartSegment + deltaSegments);
+      // Wrap -1..10
+      if (newStart < -1) newStart = 10;
+      if (newStart > 10) newStart = -1;
       if (newStart !== startSegment) {
         startSegment = newStart;
         drawRedOverlay();
@@ -544,16 +546,48 @@
     currentKey = 'C';
     drawRedOverlay();
 
-    // When key dropdown changes, update polygon
+    // --- Mode Offset Logic ---
+    // Mode order as in the dropdown
+    const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
+    // Offsets relative to Ionian (0): Lydian -1, Ionian 0, Mixolydian +1, Dorian +2, Aeolian +3, Phrygian +4, Locrian +5
+    const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
+    // Set default mode to Ionian (index 1)
+    modeSelect.selectedIndex = 1;
+    let currentModeIndex = 1;
+
+    // Helper to get key base position
+    function getKeyBasePosition() {
+      if (keyToStartSegment.hasOwnProperty(currentKey)) {
+        return keyToStartSegment[currentKey];
+      }
+      return -1;
+    }
+
+    // Helper to update polygon position based on key and mode
+    function updatePolygonForKeyAndMode() {
+      let base = getKeyBasePosition();
+      let offset = modeOffsets[currentModeIndex];
+      let newStart = base + offset;
+      // Wrap to -1..10
+      while (newStart < -1) newStart += 12;
+      while (newStart > 10) newStart -= 12;
+      startSegment = newStart;
+      drawRedOverlay();
+    }
+
+    // When key dropdown changes, update polygon (mode stays the same)
     keySelect.onchange = function() {
       currentKey = keySelect.value;
-      if (keyToStartSegment.hasOwnProperty(currentKey)) {
-        startSegment = keyToStartSegment[currentKey];
-        drawRedOverlay();
-      }
+      updatePolygonForKeyAndMode();
     };
 
-    // When dragging ends, update key dropdown
+    // When mode changes, update polygon (key stays the same)
+    modeSelect.onchange = function() {
+      currentModeIndex = modeSelect.selectedIndex;
+      updatePolygonForKeyAndMode();
+    };
+
+    // When dragging ends, update key dropdown and polygon (mode stays the same)
     function updateKeyDropdownFromPolygon() {
       // Wrap startSegment to -1..10
       if (startSegment < -1) startSegment = 10;
@@ -564,9 +598,11 @@
       const key = startSegmentToKey[idx];
       keySelect.value = key;
       currentKey = key;
+      // After changing key, update polygon for current mode
+      updatePolygonForKeyAndMode();
     }
 
-    // Patch drag logic to update key dropdown and wrap startSegment
+    // Patch drag logic to update key dropdown and polygon (mode stays the same)
     let lastStartSegment = startSegment;
     document.addEventListener('mouseup', () => {
       if (isDragging) {
@@ -598,6 +634,9 @@
         drawRedOverlay();
       }
     });
+
+    // Set initial polygon position for default key and mode
+    updatePolygonForKeyAndMode();
 
     // Draw labels at startup only (and when toggling Roman numerals)
     drawLabels();
