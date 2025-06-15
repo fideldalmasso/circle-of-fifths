@@ -485,6 +485,15 @@
       if (newStart > 10) newStart = -1;
       if (newStart !== startSegment) {
         startSegment = newStart;
+        // Get the key from the segment and find its position in dropdown
+        const key = startSegmentToKey[startSegment === -1 ? 11 : startSegment];
+        const keyIndex = Array.from(keySelect.options).findIndex(option => option.value === key);
+        // Calculate rotation based on key position
+        if (arrowCanvas) {
+          const degrees = keyIndex * 30;
+          arrowCanvas.style.transform = `rotate(${degrees}deg)`;
+          arrowCanvas.style.transformOrigin = 'center center';
+        }
         drawBothPolygons();
         drawLabels();
         drawAllArrows();
@@ -741,25 +750,6 @@
           updateKeyDropdownFromPolygon();
           lastStartSegment = startSegment;
         }
-      }
-    });
-
-    // Update drag logic to use -1..10 range
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const pxPerSegment = 380 / totalSegments;
-      let deltaSegments = Math.round(dx / pxPerSegment);
-      let newStart = (dragStartSegment + deltaSegments);
-      // Wrap -1..10
-      if (newStart < -1) newStart = 10;
-      if (newStart > 10) newStart = -1;
-      if (newStart !== startSegment) {
-        startSegment = newStart;
-        drawBothPolygons();
-        drawLabels();
-        drawAllArrows();
-        updateKeyDropdownFromPolygon();
       }
     });
 
