@@ -378,7 +378,7 @@
     const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
     const centerX = 190;
     const centerY = 190;
-    function drawRedOverlay(startSegment2, coveredSegments2, colorString, diminishedCovered = 1) {
+    function drawRedOverlay(startSegment2, coveredSegments2, colorString, diminishedCovered = 1, isDashed = false) {
       const anglePerSegment = 2 * Math.PI / totalSegments;
       // Map -1 to 11 for drawing
       let seg = startSegment2;
@@ -393,6 +393,9 @@
       const diminishedEnd = wedgeCenter + diminishedNotchSpan / 2;
 
       ctx.save();
+      if (isDashed) {
+        ctx.setLineDash([5, 5]);
+      }
       ctx.beginPath();
       // Outer arc (segment boundary to boundary)
       ctx.arc(centerX, centerY, outerRadius, startAngle, endAngle, false);
@@ -414,6 +417,7 @@
       ctx.lineWidth = 4;
       ctx.strokeStyle = colorString;
       ctx.stroke();
+      ctx.setLineDash([]); // Reset line dash
       ctx.restore();
     }
 
@@ -730,7 +734,7 @@
       ionianStartSegment = (startSegment - modeOffsets[currentModeIndex] + modeOffsets[3] + 12) % 12;
       if (ionianStartSegment > 10) ionianStartSegment -= 12;
       // Draw blue polygon first (so it appears behind)
-      drawRedOverlay(ionianStartSegment-3, 9, 'gray', 7);
+      drawRedOverlay(ionianStartSegment-3, 9, 'blue', 7, true);
       // Draw red polygon on top
       drawRedOverlay(startSegment, 3, 'red', 1);
     }
