@@ -373,16 +373,11 @@
           label.style.cursor = '';
           label.removeEventListener('click', arrowLabelClick, {capture: true});
         });
-        // Don't remove the canvas, just hide it
-        if (arrowCanvas) {
-          // arrowCanvas.style.display = 'none';
-        }
         // Reset drawing state but keep arrows
         arrowStep = 0;
         arrowFrom = null;
         document.querySelectorAll('.label').forEach(unhighlightLabel);
         arrowLabels = [];
-        clearArrowCanvas();
       }
     };
     drawDrawing.onclick = function() {
@@ -396,7 +391,7 @@
         if (!arrowCanvas) {
           createArrowCanvas();
         } else {
-          arrowCanvas.style.display = 'block';
+          arrowCanvas.style.visibility = 'visible';
         }
         document.querySelectorAll('.label').forEach(label => {
           label.style.cursor = 'pointer';
