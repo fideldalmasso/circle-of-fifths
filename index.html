@@ -378,7 +378,7 @@
     const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
     const centerX = 190;
     const centerY = 190;
-    function drawRedOverlay(startSegment2, coveredSegments2, colorString) {
+    function drawRedOverlay(startSegment2, coveredSegments2, colorString, diminishedCovered = 1) {
       const anglePerSegment = 2 * Math.PI / totalSegments;
       // Map -1 to 11 for drawing
       let seg = startSegment2;
@@ -388,7 +388,7 @@
 
       // Diminished arc: small notch at the center of the wedge
       const wedgeCenter = (startAngle + endAngle) / 2;
-      const diminishedNotchSpan = Math.PI / 6; // 20 degrees total (10 deg each side)
+      const diminishedNotchSpan = anglePerSegment * diminishedCovered; // Size based on number of segments
       const diminishedStart = wedgeCenter - diminishedNotchSpan / 2;
       const diminishedEnd = wedgeCenter + diminishedNotchSpan / 2;
 
@@ -421,9 +421,9 @@
       // Clear canvas once before drawing both polygons
       ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
       // Draw blue polygon first (so it appears behind)
-      drawRedOverlay(startSegment-3, 7, 'blue');
+      drawRedOverlay(startSegment-5, 9, 'gray', 7);
       // Draw red polygon on top
-      drawRedOverlay(startSegment, 3, 'red');
+      drawRedOverlay(startSegment, 3, 'red', 1);
     }
     drawBothPolygons();
     // --- Drag to rotate (snapping) ---
