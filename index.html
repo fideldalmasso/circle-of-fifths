@@ -378,8 +378,7 @@
     const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
     const centerX = 190;
     const centerY = 190;
-    function drawRedOverlay(startSegment2,coveredSegments2,colorString) {
-      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+    function drawRedOverlay(startSegment2, coveredSegments2, colorString) {
       const anglePerSegment = 2 * Math.PI / totalSegments;
       // Map -1 to 11 for drawing
       let seg = startSegment2;
@@ -419,10 +418,12 @@
     }
 
     function drawBothPolygons() {
-      // drawRedOverlay(-5, 7, 'blue');
-      console.log('drawBothPolygons');
+      // Clear canvas once before drawing both polygons
+      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+      // Draw blue polygon first (so it appears behind)
+      drawRedOverlay(startSegment-3, 7, 'blue');
+      // Draw red polygon on top
       drawRedOverlay(startSegment, 3, 'red');
-      drawRedOverlay(startSegment-5, 7, 'blue');
     }
     drawBothPolygons();
     // --- Drag to rotate (snapping) ---
