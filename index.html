@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Interactive Circle of Fifths</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: sans-serif;
+      background: #fafafa;
+    }
+
+    #circle {
+      position: relative;
+      width: 380px;
+      height: 380px;
+      margin-top: 30px;
+    }
+
+    .layer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+    }
+
+    .fill.major       { width: 330px; height: 330px; background: #d0f0d0; }
+    .fill.minor       { width: 260px; height: 260px; background: #d0e8ff; }
+    .fill.diminished  { width: 180px; height: 180px; background: #fce0ec; }
+
+    .ring {
+      border: 1px solid black;
+      background: transparent;
+    }
+
+    .ring.outer      { width: 330px; height: 330px; z-index: 3; }
+    .ring.major      { width: 260px; height: 260px; z-index: 3; }
+    .ring.minor      { width: 180px; height: 180px; z-index: 3; }
+    .ring.diminished { width: 100px; height: 100px; z-index: 3; }
+
+    .label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      cursor: pointer;
+      font-size: 12px;
+      z-index: 4;
+    }
+
+    .major { font-weight: bold; font-size: 14px; }
+
+    .separator {
+      position: absolute;
+      width: 1px;
+      height: 190px;
+      top: 0;
+      left: 50%;
+      background: black;
+      transform-origin: bottom center;
+      z-index: 5;
+    }
+
+    #info {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
+
+    /* Red overlay styles */
+    #red-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: auto;
+      cursor: grab;
+    }
+    #red-canvas.dragging {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <h2>Circle of Fifths</h2>
+  <div id="circle">
+    <!-- Colored fills -->
+    <div class="layer fill major"></div>
+    <div class="layer fill minor"></div>
+    <div class="layer fill diminished"></div>
+
+    <!-- Circle ring outlines -->
+    <div class="layer ring outer"></div>
+    <div class="layer ring major"></div>
+    <div class="layer ring minor"></div>
+    <div class="layer ring diminished"></div>
+
+    <!-- Red overlay (HTML/CSS only) -->
+    <canvas id="red-canvas" width="380" height="380"></canvas>
+  </div>
+  <div id="info">Click any chord to see its name.</div>
+
+  <script>
+    const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
+    const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
+    const dims   = ['Bdim','F♯dim','C♯dim','G♯dim','D♯dim','A♯dim','E♯dim','Ddim','Adim','Edim','Bd♭dim','Fd♭dim'];
+
+    const circle = document.getElementById('circle');
+    const info = document.getElementById('info');
+
+    function polarToCartesian(cx, cy, r, angleDeg) {
+      const rad = (angleDeg - 90) * Math.PI / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+
+    const center = 190;
+    const radii = { major: 150, minor: 110, dim: 70 };
+
+    majors.forEach((_, i) => {
+      const angle = i * 30;
+
+      const addLabel = (text, radius, className) => {
+        const pos = polarToCartesian(center, center, radius, angle);
+        const el = document.createElement('div');
+        el.className = `label ${className}`;
+        el.style.left = pos.x + 'px';
+        el.style.top = pos.y + 'px';
+        el.textContent = text;
+        el.onclick = () => info.textContent = `${text} chord`;
+        circle.appendChild(el);
+      };
+
+      addLabel(majors[i], radii.major, 'major');
+      addLabel(minors[i], radii.minor, 'minor');
+      addLabel(dims[i], radii.dim, 'dim');
+
+      const line = document.createElement('div');
+      line.className = 'separator';
+      line.style.transform = `rotate(${angle + 15}deg)`;
+      circle.appendChild(line);
+    });
+
+    // --- Red Overlay Logic ---
+    const redCanvas = document.getElementById('red-canvas');
+    const ctx = redCanvas.getContext('2d');
+    // Configurable: number of segments to cover (e.g., 5 for F-C-G)
+    let coveredSegments = 3;
+    // Configurable: which segment to start at (0 = C, 1 = G, ...)
+    let startSegment = 0;
+    // Number of total segments (12 for circle of fifths)
+    const totalSegments = 12;
+    // Arc radii (match your visual layers)
+    const outerRadius = 165; // just inside the major ring
+    const innerRadius = 90;  // just outside the diminished ring
+    const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
+    const centerX = 190;
+    const centerY = 190;
+    function drawRedOverlay() {
+      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+      const anglePerSegment = 2 * Math.PI / totalSegments;
+      // The arc should start and end at the segment boundaries, not centers
+      const startAngle = -(anglePerSegment / 2) + (startSegment * anglePerSegment) - Math.PI / 2;
+      const endAngle = -(anglePerSegment / 2) + ((startSegment + coveredSegments) * anglePerSegment) - Math.PI / 2;
+
+      // Diminished arc: small notch at the center of the wedge
+      const wedgeCenter = (startAngle + endAngle) / 2;
+      const diminishedNotchSpan = Math.PI / 6; // 20 degrees total (10 deg each side)
+      const diminishedStart = wedgeCenter - diminishedNotchSpan / 2;
+      const diminishedEnd = wedgeCenter + diminishedNotchSpan / 2;
+
+      ctx.save();
+      ctx.beginPath();
+      // Outer arc (segment boundary to boundary)
+      ctx.arc(centerX, centerY, outerRadius, startAngle, endAngle, false);
+      // Line to inner arc (at end boundary)
+      ctx.lineTo(centerX + innerRadius * Math.cos(endAngle), centerY + innerRadius * Math.sin(endAngle));
+      // Inner arc (reverse, from end boundary to just before the diminished notch)
+      ctx.arc(centerX, centerY, innerRadius, endAngle, diminishedEnd, true);
+      // Line to diminished arc (at diminishedEnd)
+      ctx.lineTo(centerX + diminishedRadius * Math.cos(diminishedEnd), centerY + diminishedRadius * Math.sin(diminishedEnd));
+      // Diminished arc (small arc at the bottom)
+      ctx.arc(centerX, centerY, diminishedRadius, diminishedEnd, diminishedStart, true);
+      // Line back to inner arc (at diminishedStart)
+      ctx.lineTo(centerX + innerRadius * Math.cos(diminishedStart), centerY + innerRadius * Math.sin(diminishedStart));
+      // Continue inner arc (reverse, from diminishedStart back to start boundary)
+      ctx.arc(centerX, centerY, innerRadius, diminishedStart, startAngle, true);
+      // Line to outer arc start
+      ctx.lineTo(centerX + outerRadius * Math.cos(startAngle), centerY + outerRadius * Math.sin(startAngle));
+      ctx.closePath();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'red';
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawRedOverlay();
+    // --- Drag to rotate (snapping) ---
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartSegment = 0;
+    redCanvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartSegment = startSegment;
+      redCanvas.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      // 1 full circle = 360px (approx for 380px circle), so 30deg = 30px
+      const pxPerSegment = 380 / totalSegments;
+      let deltaSegments = Math.round(dx / pxPerSegment);
+      let newStart = (dragStartSegment + deltaSegments + totalSegments) % totalSegments;
+      if (newStart !== startSegment) {
+        startSegment = newStart;
+        drawRedOverlay();
+      }
+    });
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        redCanvas.classList.remove('dragging');
+        document.body.style.userSelect = '';
+      }
+    });
+    // Make it easy to change coveredSegments in code
+    window.setRedOverlaySegments = (n) => {
+      coveredSegments = n;
+      drawRedOverlay();
+    };
+    window.setRedOverlayStart = (n) => {
+      startSegment = n;
+      drawRedOverlay();
+    };
+  </script>
+</body>
+</html>
