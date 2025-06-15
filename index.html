@@ -113,6 +113,27 @@
       background: #444;
       color: #fff;
     }
+
+    .trash-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+      color: #666;
+      transition: color 0.3s;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .trash-button:hover {
+      color: #ff4444;
+    }
+
+    .trash-button svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -168,6 +189,13 @@
       <span id="draw-normal" class="active">Transpose Key</span>
       <span id="draw-drawing">Draw Chord Progression</span>
     </div>
+    <button id="clear-drawings" class="trash-button" style="margin-left: 10px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+      </svg>
+    </button>
   </div>
   <div id="info">Click any chord to see its name.</div>
 
@@ -743,6 +771,24 @@
 
     // Initial draw of both polygons
     drawBothPolygons();
+
+    // Clear all drawings
+    document.getElementById('clear-drawings').onclick = function() {
+      arrows = [];
+      drawLabels();
+    };
+
+    // When clicking a label in drawing mode, add an arrow
+    function handleLabelClick(label) {
+      if (!drawArrowMode) return;
+      const key = label.getAttribute('data-key');
+      const mode = label.getAttribute('data-mode');
+      arrows.push({ from: { key, mode } });
+      if (arrows.length === 2) {
+        drawLabels(); // Redraw with the new arrow
+        arrows = []; // Reset for next arrow
+      }
+    }
   </script>
 </body>
 </html>
