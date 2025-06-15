@@ -134,6 +134,10 @@
   <div id="info">Click any chord to see its name.</div>
 
   <script>
+    // coveredSegments and startSegment are declared at the top
+    let coveredSegments = 3;
+    let startSegment = -1;
+
     const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb/F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
     const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
     const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','D°','A°','E°','Bd♭°','Fd♭°'];
@@ -230,10 +234,6 @@
     // --- Red Overlay Logic ---
     const redCanvas = document.getElementById('red-canvas');
     const ctx = redCanvas.getContext('2d');
-    // Configurable: number of segments to cover (e.g., 5 for F-C-G)
-    let coveredSegments = 3;
-    // Configurable: which segment to start at (0 = C, 1 = G, ...)
-    let startSegment = -1;
     // Number of total segments (12 for circle of fifths)
     const totalSegments = 12;
     // Arc radii (match your visual layers)
@@ -243,11 +243,14 @@
     const centerX = 190;
     const centerY = 190;
     function drawRedOverlay() {
+      console.log('drawRedOverlay', { startSegment, coveredSegments });
       ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
       const anglePerSegment = 2 * Math.PI / totalSegments;
-      // The arc should start and end at the segment boundaries, not centers
-      const startAngle = -(anglePerSegment / 2) + (startSegment * anglePerSegment) - Math.PI / 2;
-      const endAngle = -(anglePerSegment / 2) + ((startSegment + coveredSegments) * anglePerSegment) - Math.PI / 2;
+      // Map -1 to 11 for drawing
+      let seg = startSegment;
+      if (seg === -1) seg = 11;
+      const startAngle = -(anglePerSegment / 2) + (seg * anglePerSegment) - Math.PI / 2;
+      const endAngle = -(anglePerSegment / 2) + ((seg + coveredSegments) * anglePerSegment) - Math.PI / 2;
 
       // Diminished arc: small notch at the center of the wedge
       const wedgeCenter = (startAngle + endAngle) / 2;
@@ -514,6 +517,90 @@
     }
     makeDropdownScrollable(modeSelect);
     makeDropdownScrollable(keySelect);
+
+    // --- Key <-> Polygon Sync ---
+    // Custom mapping: key to startSegment
+    const keyToStartSegment = {
+      'C': -1,
+      'G': 0,
+      'D': 1,
+      'A': 2,
+      'E': 3,
+      'B': 4,
+      'Gb': 5,
+      'Db': 6,
+      'Ab': 7,
+      'Eb': 8,
+      'Bb': 9,
+      'F': 10
+    };
+    // Reverse mapping: startSegment to key
+    const startSegmentToKey = [
+      'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C'
+    ];
+
+    // Set default key and polygon after all functions are defined
+    keySelect.value = 'C';
+    currentKey = 'C';
+    drawRedOverlay();
+
+    // When key dropdown changes, update polygon
+    keySelect.onchange = function() {
+      currentKey = keySelect.value;
+      if (keyToStartSegment.hasOwnProperty(currentKey)) {
+        startSegment = keyToStartSegment[currentKey];
+        drawRedOverlay();
+      }
+    };
+
+    // When dragging ends, update key dropdown
+    function updateKeyDropdownFromPolygon() {
+      // Wrap startSegment to -1..10
+      if (startSegment < -1) startSegment = 10;
+      if (startSegment > 10) startSegment = -1;
+      // Map to key
+      let idx = startSegment;
+      if (idx === -1) idx = 11;
+      const key = startSegmentToKey[idx];
+      keySelect.value = key;
+      currentKey = key;
+    }
+
+    // Patch drag logic to update key dropdown and wrap startSegment
+    let lastStartSegment = startSegment;
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        redCanvas.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        // Wrap startSegment
+        if (startSegment < -1) startSegment = 10;
+        if (startSegment > 10) startSegment = -1;
+        if (startSegment !== lastStartSegment) {
+          updateKeyDropdownFromPolygon();
+          lastStartSegment = startSegment;
+        }
+      }
+    });
+
+    // Update drag logic to use -1..10 range
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      const pxPerSegment = 380 / totalSegments;
+      let deltaSegments = Math.round(dx / pxPerSegment);
+      let newStart = (dragStartSegment + deltaSegments);
+      // Wrap -1..10
+      if (newStart < -1) newStart = 10;
+      if (newStart > 10) newStart = -1;
+      if (newStart !== startSegment) {
+        startSegment = newStart;
+        drawRedOverlay();
+      }
+    });
+
+    // Draw labels at startup only (and when toggling Roman numerals)
+    drawLabels();
   </script>
 </body>
 </html>
