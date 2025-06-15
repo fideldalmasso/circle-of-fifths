@@ -378,15 +378,14 @@
     const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
     const centerX = 190;
     const centerY = 190;
-    function drawRedOverlay() {
-      console.log('drawRedOverlay', { startSegment, coveredSegments });
+    function drawRedOverlay(startSegment2,coveredSegments2,colorString) {
       ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
       const anglePerSegment = 2 * Math.PI / totalSegments;
       // Map -1 to 11 for drawing
-      let seg = startSegment;
+      let seg = startSegment2;
       if (seg === -1) seg = 11;
       const startAngle = -(anglePerSegment / 2) + (seg * anglePerSegment) - Math.PI / 2;
-      const endAngle = -(anglePerSegment / 2) + ((seg + coveredSegments) * anglePerSegment) - Math.PI / 2;
+      const endAngle = -(anglePerSegment / 2) + ((seg + coveredSegments2) * anglePerSegment) - Math.PI / 2;
 
       // Diminished arc: small notch at the center of the wedge
       const wedgeCenter = (startAngle + endAngle) / 2;
@@ -414,11 +413,18 @@
       ctx.lineTo(centerX + outerRadius * Math.cos(startAngle), centerY + outerRadius * Math.sin(startAngle));
       ctx.closePath();
       ctx.lineWidth = 4;
-      ctx.strokeStyle = 'red';
+      ctx.strokeStyle = colorString;
       ctx.stroke();
       ctx.restore();
     }
-    drawRedOverlay();
+
+    function drawBothPolygons() {
+      // drawRedOverlay(-5, 7, 'blue');
+      console.log('drawBothPolygons');
+      drawRedOverlay(startSegment, 3, 'red');
+      drawRedOverlay(startSegment-5, 7, 'blue');
+    }
+    drawBothPolygons();
     // --- Drag to rotate (snapping) ---
     let isDragging = false;
     let dragStartX = 0;
@@ -441,7 +447,7 @@
       if (newStart > 10) newStart = -1;
       if (newStart !== startSegment) {
         startSegment = newStart;
-        drawRedOverlay();
+        drawBothPolygons();
         drawLabels();
       }
     });
@@ -455,11 +461,11 @@
     // Make it easy to change coveredSegments in code
     window.setRedOverlaySegments = (n) => {
       coveredSegments = n;
-      drawRedOverlay();
+      drawBothPolygons();
     };
     window.setRedOverlayStart = (n) => {
       startSegment = n;
-      drawRedOverlay();
+      drawBothPolygons();
     };
 
     // --- Arrow Mode Logic ---
@@ -650,7 +656,7 @@
       while (newStart < -1) newStart += 12;
       while (newStart > 10) newStart -= 12;
       startSegment = newStart;
-      drawRedOverlay();
+      drawBothPolygons();
     }
 
     // When key dropdown changes, update polygon (mode stays the same)
@@ -712,7 +718,7 @@
       if (newStart > 10) newStart = -1;
       if (newStart !== startSegment) {
         startSegment = newStart;
-        drawRedOverlay();
+        drawBothPolygons();
         drawLabels();
       }
     });
