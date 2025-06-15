@@ -87,6 +87,33 @@
 </head>
 <body>
   <h2>Circle of Fifths</h2>
+  <div style="margin-bottom: 10px;">
+    <label for="mode-select">Mode: </label>
+    <select id="mode-select">
+      <option>Ionian</option>
+      <option>Dorian</option>
+      <option>Phrygian</option>
+      <option>Lydian</option>
+      <option>Mixolydian</option>
+      <option>Aeolian</option>
+      <option>Locrian</option>
+    </select>
+    <label for="key-select" style="margin-left: 20px;">Key: </label>
+    <select id="key-select">
+      <option>C</option>
+      <option>Db</option>
+      <option>D</option>
+      <option>Eb</option>
+      <option>E</option>
+      <option>F</option>
+      <option>Gb</option>
+      <option>G</option>
+      <option>Ab</option>
+      <option>A</option>
+      <option>Bb</option>
+      <option>B</option>
+    </select>
+  </div>
   <div id="circle">
     <!-- Colored fills -->
     <div class="layer fill major"></div>
@@ -128,6 +155,20 @@
     let arrowCanvas = null;
     let arrowCtx = null;
 
+    // Mode and key selection (UI only for now)
+    const modeSelect = document.getElementById('mode-select');
+    const keySelect = document.getElementById('key-select');
+    let currentMode = modeSelect.value;
+    let currentKey = keySelect.value;
+    modeSelect.onchange = function() {
+      currentMode = modeSelect.value;
+      // Future: update circle based on mode
+    };
+    keySelect.onchange = function() {
+      currentKey = keySelect.value;
+      // Future: update circle based on key
+    };
+
     function polarToCartesian(cx, cy, r, angleDeg) {
       const rad = (angleDeg - 90) * Math.PI / 180;
       return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
@@ -165,7 +206,25 @@
     toggleBtn.onclick = function() {
       useRoman = !useRoman;
       toggleBtn.textContent = useRoman ? 'Show Normal Labels' : 'Show Roman Numerals';
+      // Save current highlighted labels and arrows
+      let highlighted = [];
+      document.querySelectorAll('.label').forEach((el, i) => {
+        if (el.style.boxShadow) highlighted.push(i);
+      });
+      // Save arrow label indices
+      let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
+        const allLabels = Array.from(document.querySelectorAll('.label'));
+        return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
+      });
       drawLabels();
+      // Restore highlights
+      const allLabels = Array.from(document.querySelectorAll('.label'));
+      highlighted.forEach(i => {
+        if (allLabels[i]) highlightLabel(allLabels[i]);
+      });
+      // Restore arrows
+      arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
+      drawAllArrows();
     };
 
     // --- Red Overlay Logic ---
@@ -281,11 +340,25 @@
       if (arrowCtx) arrowCtx.clearRect(0, 0, 380, 380);
     }
 
+    function lerpColor(a, b, t) {
+      // a, b: [r,g,b], t: 0..1
+      return [
+        Math.round(a[0] + (b[0] - a[0]) * t),
+        Math.round(a[1] + (b[1] - a[1]) * t),
+        Math.round(a[2] + (b[2] - a[2]) * t)
+      ];
+    }
+
     function drawAllArrows() {
       clearArrowCanvas();
-      for (const [fromEl, toEl] of arrows) {
-        drawArrow(fromEl, toEl, false);
-      }
+      const lightGreen = [120, 255, 120];
+      const darkGreen = [0, 100, 0];
+      arrows.forEach(([fromEl, toEl, curveSeed], i) => {
+        const t = arrows.length > 1 ? i / (arrows.length - 1) : 0;
+        const colorArr = lerpColor(lightGreen, darkGreen, t);
+        const color = `rgb(${colorArr[0]},${colorArr[1]},${colorArr[2]})`;
+        drawArrow(fromEl, toEl, false, color, curveSeed);
+      });
     }
 
     function highlightLabel(labelEl) {
@@ -298,7 +371,7 @@
       labelEl.style.zIndex = 4;
     }
 
-    function drawArrow(fromEl, toEl, clear = false) {
+    function drawArrow(fromEl, toEl, clear = false, color = '#0f0', curveSeed = 0) {
       if (clear) clearArrowCanvas();
       if (!fromEl || !toEl) return;
       const fromRect = fromEl.getBoundingClientRect();
@@ -309,16 +382,32 @@
       const fromY = fromRect.top + fromRect.height / 2 - circleRect.top;
       const toX = toRect.left + toRect.width / 2 - circleRect.left;
       const toY = toRect.top + toRect.height / 2 - circleRect.top;
-      // Draw arrow line
+      // Curve control point: perpendicular to the line, random offset
+      const mx = (fromX + toX) / 2;
+      const my = (fromY + toY) / 2;
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      // Use curveSeed for deterministic randomness per arrow
+      const rand = Math.sin(curveSeed * 9999) * 0.5 + 0.5; // 0..1
+      const curveMag = 30 + rand * 30; // px
+      const perpX = -dy / len;
+      const perpY = dx / len;
+      const cx = mx + perpX * curveMag * (rand > 0.5 ? 1 : -1);
+      const cy = my + perpY * curveMag * (rand > 0.5 ? 1 : -1);
+      // Draw curved arrow
       arrowCtx.save();
-      arrowCtx.strokeStyle = '#0f0';
+      arrowCtx.strokeStyle = color;
       arrowCtx.lineWidth = 4;
       arrowCtx.beginPath();
       arrowCtx.moveTo(fromX, fromY);
-      arrowCtx.lineTo(toX, toY);
+      arrowCtx.quadraticCurveTo(cx, cy, toX, toY);
       arrowCtx.stroke();
-      // Draw arrowhead
-      const angle = Math.atan2(toY - fromY, toX - fromX);
+      // Draw arrowhead at end of curve
+      const t = 0.92; // near the end
+      const qx = (1 - t) * (1 - t) * fromX + 2 * (1 - t) * t * cx + t * t * toX;
+      const qy = (1 - t) * (1 - t) * fromY + 2 * (1 - t) * t * cy + t * t * toY;
+      const angle = Math.atan2(toY - cy, toX - cx);
       const headlen = 18;
       arrowCtx.beginPath();
       arrowCtx.moveTo(toX, toY);
@@ -333,7 +422,8 @@
     function resetArrowMode() {
       arrowStep = 0;
       arrowFrom = null;
-      arrowLabels.forEach(unhighlightLabel);
+      // Remove highlight from all labels
+      document.querySelectorAll('.label').forEach(unhighlightLabel);
       arrowLabels = [];
       arrows = [];
       clearArrowCanvas();
@@ -344,6 +434,7 @@
       drawArrowBtn.textContent = drawArrowMode ? 'Cancel Arrow Drawing' : 'Draw Arrow by Steps';
       resetArrowMode();
       // Toggle pointer events on the red overlay canvas
+      const redCanvas = document.getElementById('red-canvas');
       if (drawArrowMode) {
         if (redCanvas) redCanvas.style.pointerEvents = 'none';
       } else {
@@ -356,18 +447,18 @@
           label.style.cursor = 'pointer';
           label.addEventListener('click', arrowLabelClick, {capture: true});
         });
-        document.addEventListener('mousedown', arrowOutsideClick, {capture: true});
       } else {
         // Remove listeners and highlights
         document.querySelectorAll('.label').forEach(label => {
           label.style.cursor = '';
           label.removeEventListener('click', arrowLabelClick, {capture: true});
         });
-        document.removeEventListener('mousedown', arrowOutsideClick, {capture: true});
         resetArrowMode();
         if (arrowCanvas) arrowCanvas.remove();
         arrowCanvas = null;
         arrowCtx = null;
+        // Restore pointer events for red overlay canvas
+        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
       }
     };
 
@@ -383,19 +474,14 @@
       } else if (arrowStep === 1 && label !== arrowFrom) {
         highlightLabel(label);
         arrowLabels.push(label);
-        arrows.push([arrowFrom, label]);
+        // Use a random seed for curve per arrow
+        const curveSeed = Math.random();
+        arrows.push([arrowFrom, label, curveSeed]);
         drawAllArrows();
         // Prepare for next step
         arrowFrom = label;
         arrowStep = 1;
         arrowLabels = [arrowFrom];
-      }
-    }
-
-    function arrowOutsideClick(e) {
-      const circle = document.getElementById('circle');
-      if (!circle.contains(e.target)) {
-        resetArrowMode();
       }
     }
 
