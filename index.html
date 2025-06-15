@@ -266,6 +266,13 @@
     };
     keySelect.onchange = function() {
       currentKey = keySelect.value;
+      // Rotate canvas based on key position (30 degrees per step)
+      if (arrowCanvas) {
+        const keyIndex = keySelect.selectedIndex;
+        const degrees = keyIndex * 30;
+        arrowCanvas.style.transform = `rotate(${degrees}deg)`;
+        arrowCanvas.style.transformOrigin = 'center center';
+      }
       updatePolygonForKeyAndMode();
       drawLabels();
       drawAllArrows();
@@ -694,14 +701,6 @@
       startSegment = newStart;
       drawBothPolygons();
     }
-
-    // When key dropdown changes, update polygon (mode stays the same)
-    keySelect.onchange = function() {
-      currentKey = keySelect.value;
-      updatePolygonForKeyAndMode();
-      drawLabels();
-      drawAllArrows();
-    };
 
     // When mode changes, update polygon (key stays the same)
     modeSelect.onchange = function() {
