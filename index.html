@@ -50,9 +50,21 @@
       cursor: pointer;
       font-size: 12px;
       z-index: 4;
+      padding: 4px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
+      transition: all 0.2s ease;
     }
 
-    .major { font-weight: bold; font-size: 14px; }
+    .label:hover {
+      transform: translate(-50%, -50%) scale(1.2);
+      background: rgba(255, 255, 255, 0.9);
+      z-index: 25;
+    }
+
+    .label.major { font-weight: bold; font-size: 14px; }
+    .label.minor { font-style: italic; }
+    .label.diminished { font-size: 11px; }
 
     .separator {
       position: absolute;
@@ -182,6 +194,9 @@
     <!-- White center circle -->
     <div class="layer fill center"></div>
 
+    <!-- This div will contain the chord labels -->
+    <div id="chord-labels"></div>
+
     <!-- Red overlay (HTML/CSS only) -->
     <canvas id="red-canvas" width="380" height="380"></canvas>
   </div>
@@ -208,713 +223,276 @@
     <input type="text" id="chord-progression" readonly style="width: 100%; padding: 8px; font-size: 16px; text-align: center; border: 1px solid #ccc; border-radius: 4px;">
   </div>
 
-  <script>
-    // --- Key Mapping Setup (define at the very top) ---
-    const keyToStartSegment = {
-      'C': -1,
-      'G': 0,
-      'D': 1,
-      'A': 2,
-      'E': 3,
-      'B': 4,
-      'Gb': 5,
-      'Db': 6,
-      'Ab': 7,
-      'Eb': 8,
-      'Bb': 9,
-      'F': 10
-    };
-    const startSegmentToKey = [
-      'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C'
-    ];
+  <script type="module">
+    import { RING, CIRCLE_POSITIONS, getChordNameAtPosition, getChordPolarCoordinates, polarToCartesian } from './chord-position-map.js';
+    import { ChordHighlighter } from './chord-highlight.js';
 
-    // --- Mode and Key Setup (define at the very top) ---
-    const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
-    // Offsets relative to Ionian (0): Lydian +1, Ionian 0, Mixolydian -1, Dorian -2, Aeolian -3, Phrygian -4, Locrian -5
-    const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
-
-    // coveredSegments and startSegment are declared at the top
-    let coveredSegments = 3;
-    let startSegment = -1;
-
-    const majors = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb/F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
-    const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
-    const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','C°','G°','D°','A°','E°'];
-
-    // Update the Roman numeral arrays to match the circle of fifths order
-    // Order: C, G, D, A, E, B, Gb, Db, Ab, Eb, Bb, F
-    const majors_roman = ['I', 'V', 'II', 'VI', 'III', 'VII', 'bV', 'bII', 'bVI', 'bIII', 'bVII', 'IV'];
-    const minors_roman = ['vi', 'iii', 'vii', 'iv#', 'i#', 'vi#', 'biii', 'bvii', 'iv', 'i', 'v', 'ii'];
-    const dims_roman = ['vii°', 'iv#°', 'i#°', 'v#°', 'vi#°', 'biii°', 'bvii°', 'iv°', 'i°', 'v°', 'ii°', 'vi°'];
-
+    // Basic initialization
     const circle = document.getElementById('circle');
     const info = document.getElementById('info');
-    // Roman numerals toggle
-    const romanToggle = document.getElementById('roman-toggle');
-    const romanChords = document.getElementById('roman-chords');
-    const romanRoman = document.getElementById('roman-roman');
-    // Drawing mode toggle
-    const drawToggle = document.getElementById('draw-toggle');
-    const drawNormal = document.getElementById('draw-normal');
-    const drawDrawing = document.getElementById('draw-drawing');
-    let useRoman = false;
-    let drawArrowMode = false;
-    let arrowStep = 0;
-    let arrowFrom = null;
-    let arrowLabels = [];
-    let arrows = [];
-    let arrowCanvas = null;
-    let arrowCtx = null;
-
-    // Mode and key selection (UI only for now)
     const modeSelect = document.getElementById('mode-select');
     const keySelect = document.getElementById('key-select');
-    let currentMode = modeSelect.value;
-    let currentKey = keySelect.value;
-    modeSelect.onchange = function() {
-      currentMode = modeSelect.value;
-      // Future: update circle based on mode
-    };
-    keySelect.onchange = function() {
-      currentKey = keySelect.value;
-      // Rotate canvas based on key position (30 degrees per step)
-      if (arrowCanvas) {
-        const keyIndex = keySelect.selectedIndex;
-        const degrees = keyIndex * 30;
-        arrowCanvas.style.transform = `rotate(${degrees}deg)`;
-        arrowCanvas.style.transformOrigin = 'center center';
-      }
-      updatePolygonForKeyAndMode();
-      drawLabels();
-      drawAllArrows();
-    };
-
-    function polarToCartesian(cx, cy, r, angleDeg) {
-      const rad = (angleDeg - 90) * Math.PI / 180;
-      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-    }
-
-    const center = 190;
-    const radii = { major: 150, minor: 110, dim: 70 };
-
-    function drawLabels() {
-      // Remove old labels
-      Array.from(document.querySelectorAll('.label')).forEach(el => el.remove());
-      // Robust: check modeOrder and modeOffsets
-      if (!modeOrder || !modeOffsets || typeof modeSelect.selectedIndex !== 'number') return;
-      // Determine which label to highlight
-      const keyIdx = keyToStartSegment.hasOwnProperty(currentKey) ? (keyToStartSegment[currentKey] === -1 ? 11 : keyToStartSegment[currentKey]) : 0;
-      const majorModes = ['Lydian', 'Ionian', 'Mixolydian'];
-      const isMajor = majorModes.includes(modeOrder[modeSelect.selectedIndex]);
-      const modeOffset = isMajor ? 0 : -3;
-      let highlightIdx = (keyIdx + modeOffset + 1 + 12) % 12;
-
-      // Get rotation offset based on key position (reversed direction)
-      const rotationOffset = (12 - keySelect.selectedIndex) % 12;
-
-      majors.forEach((_, i) => {
-        const angle = i * 30;
-        const addLabel = (text, radius, className, highlight) => {
-          const pos = polarToCartesian(center, center, radius, angle);
-          const el = document.createElement('div');
-          el.className = `label ${className}` + (highlight ? ' highlighted-key' : '');
-          el.style.left = pos.x + 'px';
-          el.style.top = pos.y + 'px';
-
-          // Rotate Roman numerals based on key position
-          if (useRoman) {
-            const rotatedIdx = (i + rotationOffset) % 12;
-            if (className === 'major') {
-              el.textContent = majors_roman[rotatedIdx];
-            } else if (className === 'minor') {
-              el.textContent = minors_roman[rotatedIdx];
-            } else {
-              el.textContent = dims_roman[rotatedIdx];
-            }
-          } else {
-            el.textContent = text;
-          }
-
-          el.onclick = () => info.textContent = `${text} chord`;
-          circle.appendChild(el);
-        };
-        addLabel(useRoman ? majors_roman[i] : majors[i], radii.major, 'major', isMajor && i === highlightIdx);
-        addLabel(useRoman ? minors_roman[i] : minors[i], radii.minor, 'minor', !isMajor && i === highlightIdx);
-        addLabel(useRoman ? dims_roman[i] : dims[i], radii.dim, 'dim', false);
-        const line = document.createElement('div');
-        line.className = 'separator';
-        line.style.transform = `rotate(${angle + 15}deg)`;
-        circle.appendChild(line);
-      });
-    }
-    drawLabels();
-
-    // Roman numerals toggle logic
-    romanChords.onclick = function() {
-      if (useRoman) {
-        useRoman = false;
-        romanChords.classList.add('active');
-        romanRoman.classList.remove('active');
-        // Save current highlighted labels and arrows
-        let highlighted = [];
-        document.querySelectorAll('.label').forEach((el, i) => {
-          if (el.style.boxShadow) highlighted.push(i);
-        });
-        let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
-          const allLabels = Array.from(document.querySelectorAll('.label'));
-          return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
-        });
-        drawLabels();
-        const allLabels = Array.from(document.querySelectorAll('.label'));
-        highlighted.forEach(i => {
-          if (allLabels[i]) highlightLabel(allLabels[i]);
-        });
-        arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
-        drawAllArrows();
-        // Update chord progression display to show chord names
-        updateChordProgressionDisplay();
-      }
-    };
-    romanRoman.onclick = function() {
-      if (!useRoman) {
-        useRoman = true;
-        romanChords.classList.remove('active');
-        romanRoman.classList.add('active');
-        // Save current highlighted labels and arrows
-        let highlighted = [];
-        document.querySelectorAll('.label').forEach((el, i) => {
-          if (el.style.boxShadow) highlighted.push(i);
-        });
-        let arrowIndices = arrows.map(([fromEl, toEl, curveSeed]) => {
-          const allLabels = Array.from(document.querySelectorAll('.label'));
-          return [allLabels.indexOf(fromEl), allLabels.indexOf(toEl), curveSeed];
-        });
-        drawLabels();
-        const allLabels = Array.from(document.querySelectorAll('.label'));
-        highlighted.forEach(i => {
-          if (allLabels[i]) highlightLabel(allLabels[i]);
-        });
-        arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
-        drawAllArrows();
-        // Update chord progression display to show Roman numerals
-        updateChordProgressionDisplay();
-      }
-    };
-
-    // Drawing mode toggle logic
-    drawNormal.onclick = function() {
-      if (drawArrowMode) {
-        drawArrowMode = false;
-        drawNormal.classList.add('active');
-        drawDrawing.classList.remove('active');
-        const redCanvas = document.getElementById('red-canvas');
-        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = '';
-          label.removeEventListener('click', arrowLabelClick, {capture: true});
-        });
-        // Reset drawing state but keep arrows
-        arrowStep = 0;
-        arrowFrom = null;
-        document.querySelectorAll('.label').forEach(unhighlightLabel);
-        // Clear progression when exiting drawing mode
-        chordProgression = [];
-        romanProgression = [];
-        updateChordProgressionDisplay();
-      }
-    };
-    drawDrawing.onclick = function() {
-      if (!drawArrowMode) {
-        drawArrowMode = true;
-        drawNormal.classList.remove('active');
-        drawDrawing.classList.add('active');
-        const redCanvas = document.getElementById('red-canvas');
-        if (redCanvas) redCanvas.style.pointerEvents = 'none';
-        // Create or show the canvas
-        if (!arrowCanvas) {
-          createArrowCanvas();
-        } else {
-          arrowCanvas.style.visibility = 'visible';
-        }
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = 'pointer';
-          label.addEventListener('click', arrowLabelClick, {capture: true});
-        });
-        // Reset progressions and ensure text field is cleared
-        chordProgression = [];
-        romanProgression = [];
-        chordProgressionField.value = '';
-        // Redraw all arrows
-        drawAllArrows();
-      }
-    };
-
-    // --- Red Overlay Logic ---
+    const romanToggle = document.getElementById('roman-toggle');
+    const drawToggle = document.getElementById('draw-toggle');
     const redCanvas = document.getElementById('red-canvas');
-    const ctx = redCanvas.getContext('2d');
-    // Number of total segments (12 for circle of fifths)
-    const totalSegments = 12;
-    // Arc radii (match your visual layers)
-    const outerRadius = 165; // just inside the major ring
-    const innerRadius = 90;  // just outside the diminished ring
-    const diminishedRadius = 50; // inside the diminished ring (adjust as needed)
-    const centerX = 190;
-    const centerY = 190;
-    function drawRedOverlay(startSegment2, coveredSegments2, colorString, diminishedCovered = 1, isDashed = false) {
-      const anglePerSegment = 2 * Math.PI / totalSegments;
-      // Map -1 to 11 for drawing
-      let seg = startSegment2;
-      if (seg === -1) seg = 11;
-      const startAngle = -(anglePerSegment / 2) + (seg * anglePerSegment) - Math.PI / 2;
-      const endAngle = -(anglePerSegment / 2) + ((seg + coveredSegments2) * anglePerSegment) - Math.PI / 2;
-
-      // Diminished arc: small notch at the center of the wedge
-      const wedgeCenter = (startAngle + endAngle) / 2;
-      const diminishedNotchSpan = anglePerSegment * diminishedCovered; // Size based on number of segments
-      const diminishedStart = wedgeCenter - diminishedNotchSpan / 2;
-      const diminishedEnd = wedgeCenter + diminishedNotchSpan / 2;
-
-      ctx.save();
-      if (isDashed) {
-        ctx.setLineDash([5, 5]);
-      }
-      ctx.beginPath();
-      // Outer arc (segment boundary to boundary)
-      ctx.arc(centerX, centerY, outerRadius, startAngle, endAngle, false);
-      // Line to inner arc (at end boundary)
-      ctx.lineTo(centerX + innerRadius * Math.cos(endAngle), centerY + innerRadius * Math.sin(endAngle));
-      // Inner arc (reverse, from end boundary to just before the diminished notch)
-      ctx.arc(centerX, centerY, innerRadius, endAngle, diminishedEnd, true);
-      // Line to diminished arc (at diminishedEnd)
-      ctx.lineTo(centerX + diminishedRadius * Math.cos(diminishedEnd), centerY + diminishedRadius * Math.sin(diminishedEnd));
-      // Diminished arc (small arc at the bottom)
-      ctx.arc(centerX, centerY, diminishedRadius, diminishedEnd, diminishedStart, true);
-      // Line back to inner arc (at diminishedStart)
-      ctx.lineTo(centerX + innerRadius * Math.cos(diminishedStart), centerY + innerRadius * Math.sin(diminishedStart));
-      // Continue inner arc (reverse, from diminishedStart back to start boundary)
-      ctx.arc(centerX, centerY, innerRadius, diminishedStart, startAngle, true);
-      // Line to outer arc start
-      ctx.lineTo(centerX + outerRadius * Math.cos(startAngle), centerY + outerRadius * Math.sin(startAngle));
-      ctx.closePath();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = colorString;
-      ctx.stroke();
-      ctx.setLineDash([]); // Reset line dash
-      ctx.restore();
-    }
-
-    // --- Drag to rotate (snapping) ---
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartSegment = 0;
-    redCanvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      dragStartX = e.clientX;
-      dragStartSegment = startSegment;
-      redCanvas.classList.add('dragging');
-      document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const pxPerSegment = 380 / totalSegments;
-      let deltaSegments = Math.round(dx / pxPerSegment);
-      let newStart = (dragStartSegment + deltaSegments);
-      // Wrap -1..10
-      if (newStart < -1) newStart = 10;
-      if (newStart > 10) newStart = -1;
-      if (newStart !== startSegment) {
-        startSegment = newStart;
-        // Get the key from the segment and find its position in dropdown
-        const key = startSegmentToKey[startSegment === -1 ? 11 : startSegment];
-        const keyIndex = Array.from(keySelect.options).findIndex(option => option.value === key);
-        // Calculate rotation based on key position
-        if (arrowCanvas) {
-          const degrees = keyIndex * 30;
-          arrowCanvas.style.transform = `rotate(${degrees}deg)`;
-          arrowCanvas.style.transformOrigin = 'center center';
-        }
-        drawBothPolygons();
-        drawLabels();
-        drawAllArrows();
-        updateKeyDropdownFromPolygon();
-      }
-    });
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        redCanvas.classList.remove('dragging');
-        document.body.style.userSelect = '';
-      }
-    });
-    // Make it easy to change coveredSegments in code
-    window.setRedOverlaySegments = (n) => {
-      coveredSegments = n;
-      drawBothPolygons();
-    };
-    window.setRedOverlayStart = (n) => {
-      startSegment = n;
-      drawBothPolygons();
-    };
-
-    // --- Arrow Mode Logic ---
-    function createArrowCanvas() {
-      if (!arrowCanvas) {
-        arrowCanvas = document.createElement('canvas');
-        arrowCanvas.width = 380;
-        arrowCanvas.height = 380;
-        arrowCanvas.style.position = 'absolute';
-        arrowCanvas.style.top = '0';
-        arrowCanvas.style.left = '0';
-        arrowCanvas.style.pointerEvents = 'none';
-        arrowCanvas.style.zIndex = 20;
-        document.getElementById('circle').appendChild(arrowCanvas);
-        arrowCtx = arrowCanvas.getContext('2d');
-      }
-    }
-
-    function clearArrowCanvas() {
-      if (arrowCtx) arrowCtx.clearRect(0, 0, 380, 380);
-    }
-
-    function lerpColor(a, b, t) {
-      // a, b: [r,g,b], t: 0..1
-      return [
-        Math.round(a[0] + (b[0] - a[0]) * t),
-        Math.round(a[1] + (b[1] - a[1]) * t),
-        Math.round(a[2] + (b[2] - a[2]) * t)
-      ];
-    }
-
-    function drawAllArrows() {
-      const darkOrange = [200, 100, 0];  // Dark orange
-      const lightOrange = [255, 200, 100];  // Light orange
-      arrows.forEach(([fromEl, toEl, curveSeed], i) => {
-        const t = arrows.length > 1 ? i / (arrows.length - 1) : 0;
-        const colorArr = lerpColor(darkOrange, lightOrange, t);
-        const color = `rgb(${colorArr[0]},${colorArr[1]},${colorArr[2]})`;
-        drawArrow(fromEl, toEl, false, color, curveSeed);
-      });
-    }
-
-    function highlightLabel(labelEl) {
-      labelEl.style.boxShadow = '0 0 0 4px #ff8c00, 0 0 10px 4px #ff8c0088';
-      labelEl.style.borderRadius = '50%';
-      labelEl.style.zIndex = 21;
-    }
-    function unhighlightLabel(labelEl) {
-      labelEl.style.boxShadow = '';
-      labelEl.style.zIndex = 4;
-    }
-
-    function drawArrow(fromEl, toEl, clear = false, color = '#0f0', curveSeed = 0) {
-      if (!fromEl || !toEl) return;
-      const fromRect = fromEl.getBoundingClientRect();
-      const toRect = toEl.getBoundingClientRect();
-      const circleRect = document.getElementById('circle').getBoundingClientRect();
-      // Center of each label
-      const fromX = fromRect.left + fromRect.width / 2 - circleRect.left;
-      const fromY = fromRect.top + fromRect.height / 2 - circleRect.top;
-      const toX = toRect.left + toRect.width / 2 - circleRect.left;
-      const toY = toRect.top + toRect.height / 2 - circleRect.top;
-      // Curve control point: perpendicular to the line, random offset
-      const mx = (fromX + toX) / 2;
-      const my = (fromY + toY) / 2;
-      const dx = toX - fromX;
-      const dy = toY - fromY;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      // Use curveSeed for deterministic randomness per arrow
-      const rand = Math.sin(curveSeed * 9999) * 0.5 + 0.5; // 0..1
-      const curveMag = 30 + rand * 30; // px
-      const perpX = -dy / len;
-      const perpY = dx / len;
-      const cx = mx + perpX * curveMag * (rand > 0.5 ? 1 : -1);
-      const cy = my + perpY * curveMag * (rand > 0.5 ? 1 : -1);
-      // Draw curved arrow
-      arrowCtx.save();
-      arrowCtx.strokeStyle = color;
-      arrowCtx.lineWidth = 4;
-      arrowCtx.beginPath();
-      arrowCtx.moveTo(fromX, fromY);
-      arrowCtx.quadraticCurveTo(cx, cy, toX, toY);
-      arrowCtx.stroke();
-      // Draw arrowhead at end of curve
-      const t = 0.92; // near the end
-      const qx = (1 - t) * (1 - t) * fromX + 2 * (1 - t) * t * cx + t * t * toX;
-      const qy = (1 - t) * (1 - t) * fromY + 2 * (1 - t) * t * cy + t * t * toY;
-      const angle = Math.atan2(toY - cy, toX - cx);
-      const headlen = 18;
-      arrowCtx.beginPath();
-      arrowCtx.moveTo(toX, toY);
-      arrowCtx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 7), toY - headlen * Math.sin(angle - Math.PI / 7));
-      arrowCtx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 7), toY - headlen * Math.sin(angle + Math.PI / 7));
-      arrowCtx.lineTo(toX, toY);
-      arrowCtx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 7), toY - headlen * Math.sin(angle - Math.PI / 7));
-      arrowCtx.stroke();
-      arrowCtx.restore();
-    }
-
-    function resetArrowMode() {
-      arrowStep = 0;
-      arrowFrom = null;
-      // Remove highlight from all labels
-      document.querySelectorAll('.label').forEach(unhighlightLabel);
-      arrowLabels = [];
-    }
-
-    // Add variables to store chord progression data
-    let chordProgression = [];
-    let romanProgression = [];
+    const chordLabelsContainer = document.getElementById('chord-labels');
     const chordProgressionField = document.getElementById('chord-progression');
 
-    function updateChordProgressionDisplay() {
-      // Show either chord names or Roman numerals based on the current mode
-      const displayText = useRoman ? romanProgression.join(' - ') : chordProgression.join(' - ');
-      chordProgressionField.value = displayText;
-    }
-
-    function getRomanNumeral(labelText, isMajor) {
-      // Get the current key
-      const currentKey = keySelect.value;
-
-      // Define the Roman numeral mapping for each key
-      const romanMap = {
-        'C': { 'C': 'I', 'G': 'V', 'D': 'II', 'A': 'VI', 'E': 'III', 'B': 'VII', 'Gb': 'bV', 'Db': 'bII', 'Ab': 'bVI', 'Eb': 'bIII', 'Bb': 'bVII', 'F': 'IV' },
-        'G': { 'G': 'I', 'D': 'V', 'A': 'II', 'E': 'VI', 'B': 'III', 'Gb': 'VII', 'Db': 'bV', 'Ab': 'bII', 'Eb': 'bVI', 'Bb': 'bIII', 'F': 'bVII', 'C': 'IV' },
-        'D': { 'D': 'I', 'A': 'V', 'E': 'II', 'B': 'VI', 'Gb': 'III', 'Db': 'VII', 'Ab': 'bV', 'Eb': 'bII', 'Bb': 'bVI', 'F': 'bIII', 'C': 'bVII', 'G': 'IV' },
-        'A': { 'A': 'I', 'E': 'V', 'B': 'II', 'Gb': 'VI', 'Db': 'III', 'Ab': 'VII', 'Eb': 'bV', 'Bb': 'bII', 'F': 'bVI', 'C': 'bIII', 'G': 'bVII', 'D': 'IV' },
-        'E': { 'E': 'I', 'B': 'V', 'Gb': 'II', 'Db': 'VI', 'Ab': 'III', 'Eb': 'VII', 'Bb': 'bV', 'F': 'bII', 'C': 'bVI', 'G': 'bIII', 'D': 'bVII', 'A': 'IV' },
-        'B': { 'B': 'I', 'Gb': 'V', 'Db': 'II', 'Ab': 'VI', 'Eb': 'III', 'Bb': 'VII', 'F': 'bV', 'C': 'bII', 'G': 'bVI', 'D': 'bIII', 'A': 'bVII', 'E': 'IV' },
-        'Gb': { 'Gb': 'I', 'Db': 'V', 'Ab': 'II', 'Eb': 'VI', 'Bb': 'III', 'F': 'VII', 'C': 'bV', 'G': 'bII', 'D': 'bVI', 'A': 'bIII', 'E': 'bVII', 'B': 'IV' },
-        'Db': { 'Db': 'I', 'Ab': 'V', 'Eb': 'II', 'Bb': 'VI', 'F': 'III', 'C': 'VII', 'G': 'bV', 'D': 'bII', 'A': 'bVI', 'E': 'bIII', 'B': 'bVII', 'Gb': 'IV' },
-        'Ab': { 'Ab': 'I', 'Eb': 'V', 'Bb': 'II', 'F': 'VI', 'C': 'III', 'G': 'VII', 'D': 'bV', 'A': 'bII', 'E': 'bVI', 'B': 'bIII', 'Gb': 'bVII', 'Db': 'IV' },
-        'Eb': { 'Eb': 'I', 'Bb': 'V', 'F': 'II', 'C': 'VI', 'G': 'III', 'D': 'VII', 'A': 'bV', 'E': 'bII', 'B': 'bVI', 'Gb': 'bIII', 'Db': 'bVII', 'Ab': 'IV' },
-        'Bb': { 'Bb': 'I', 'F': 'V', 'C': 'II', 'G': 'VI', 'D': 'III', 'A': 'VII', 'E': 'bV', 'B': 'bII', 'Gb': 'bVI', 'Db': 'bIII', 'Ab': 'bVII', 'Eb': 'IV' },
-        'F': { 'F': 'I', 'C': 'V', 'G': 'II', 'D': 'VI', 'A': 'III', 'E': 'VII', 'B': 'bV', 'Gb': 'bII', 'Db': 'bVI', 'Ab': 'bIII', 'Eb': 'bVII', 'Bb': 'IV' }
-      };
-
-      // Get the base chord name (remove 'm' or '°' for lookup)
-      const baseChord = labelText.replace(/[m°]/g, '');
-
-      // Get the Roman numeral for the major chord
-      let romanNum = romanMap[currentKey][baseChord];
-
-      // Adjust for minor or diminished
-      if (labelText.includes('m')) {
-        romanNum = romanNum.toLowerCase();
-      } else if (labelText.includes('°')) {
-        romanNum = romanNum + '°';
-      }
-
-      return romanNum;
-    }
-
-    function arrowLabelClick(e) {
-      e.stopPropagation();
-      const label = e.currentTarget;
-      const labelText = label.textContent;
-      const isMajor = label.classList.contains('major');
-
-      if (arrowStep === 0) {
-        // Only reset the drawing state, not the arrows
-        arrowStep = 0;
-        arrowFrom = null;
-        document.querySelectorAll('.label').forEach(unhighlightLabel);
-        arrowLabels = [];
-        // Reset progressions
-        chordProgression = [];
-        romanProgression = [];
-        // Redraw existing arrows
-        drawAllArrows();
-
-        highlightLabel(label);
-        arrowLabels = [label];
-        arrowFrom = label;
-        arrowStep = 1;
-
-        // Add first chord to progression
-        chordProgression.push(labelText);
-        const romanNum = getRomanNumeral(labelText, isMajor);
-        romanProgression.push(romanNum);
-        updateChordProgressionDisplay();
-      } else if (arrowStep === 1 && label !== arrowFrom) {
-        highlightLabel(label);
-        arrowLabels.push(label);
-        // Use a random seed for curve per arrow
-        const curveSeed = Math.random();
-        arrows.push([arrowFrom, label, curveSeed]);
-        drawAllArrows();
-        // Prepare for next step
-        arrowFrom = label;
-        arrowStep = 1;
-        arrowLabels = [arrowFrom];
-
-        // Add next chord to progression
-        chordProgression.push(labelText);
-        const romanNum = getRomanNumeral(labelText, isMajor);
-        romanProgression.push(romanNum);
-        updateChordProgressionDisplay();
-      }
-    }
-
-    // Redraw labels and re-attach listeners if in arrow mode
-    const oldDrawLabels = drawLabels;
-    drawLabels = function() {
-      oldDrawLabels();
-      if (drawArrowMode) {
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = 'pointer';
-          label.addEventListener('click', arrowLabelClick, {capture: true});
-        });
-        drawAllArrows();
-      }
-    }
-
-    // Make dropdowns scrollable with mouse wheel
-    function makeDropdownScrollable(select) {
-      select.addEventListener('wheel', function(e) {
-        e.preventDefault();
-        const delta = Math.sign(e.deltaY);
-        let newIdx = select.selectedIndex + delta;
-        if (newIdx < 0) newIdx = select.options.length - 1;
-        if (newIdx >= select.options.length) newIdx = 0;
-        if (newIdx !== select.selectedIndex) {
-          select.selectedIndex = newIdx;
-          select.dispatchEvent(new Event('change'));
-        }
-      }, { passive: false });
-    }
-    makeDropdownScrollable(modeSelect);
-    makeDropdownScrollable(keySelect);
-
-    // --- Mode Offset Logic ---
-    // Mode order as in the dropdown
-    // const modeOrder = ['Lydian', 'Ionian', 'Mixolydian', 'Dorian', 'Aeolian', 'Phrygian', 'Locrian'];
-    // // Offsets relative to Ionian (0): Lydian -1, Ionian 0, Mixolydian +1, Dorian +2, Aeolian +3, Phrygian +4, Locrian +5
-    // const modeOffsets = [1, 0, -1, -2, -3, -4, -5];
-    // Set default mode to Ionian (index 1)
-    modeSelect.selectedIndex = 1;
-    let currentModeIndex = 1;
-
-    // Helper to get key base position
-    function getKeyBasePosition() {
-      if (keyToStartSegment.hasOwnProperty(currentKey)) {
-        return keyToStartSegment[currentKey];
-      }
-      return -1;
-    }
-
-    // Helper to update polygon position based on key and mode
-    function updatePolygonForKeyAndMode() {
-      let base = getKeyBasePosition();
-      let offset = modeOffsets[currentModeIndex];
-      let newStart = base + offset;
-      // Wrap to -1..10
-      while (newStart < -1) newStart += 12;
-      while (newStart > 10) newStart -= 12;
-      startSegment = newStart;
-      drawBothPolygons();
-    }
-
-    // When mode changes, update polygon (key stays the same)
-    modeSelect.onchange = function() {
-      currentModeIndex = modeSelect.selectedIndex;
-      updatePolygonForKeyAndMode();
-      drawLabels();
-      drawAllArrows();
+    // App state
+    let state = {
+      key: 'C', // Default key
+      mode: 'ionian (major)', // Default mode
+      showRomanNumerals: false,
+      progression: []
     };
 
-    // When dragging ends, update key dropdown and polygon (mode stays the same)
-    function updateKeyDropdownFromPolygon() {
-      // Wrap startSegment to -1..10
-      if (startSegment < -1) startSegment = 10;
-      if (startSegment > 10) startSegment = -1;
-      // Map to key
-      let idx = startSegment;
-      if (idx === -1) idx = 11;
-      const key = startSegmentToKey[idx];
-      keySelect.value = key;
-      currentKey = key;
-      // After changing key, update polygon for current mode
-      updatePolygonForKeyAndMode();
-      drawLabels();
-      drawAllArrows();
+    // Mode name mapping (from dropdown to internal representation)
+    const modeNameMap = {
+      'Ionian': 'ionian (major)',
+      'Aeolian': 'aeolian (minor)',
+      'Dorian': 'dorian',
+      'Phrygian': 'phrygian',
+      'Lydian': 'lydian',
+      'Mixolydian': 'mixolydian',
+      'Locrian': 'locrian'
+    };
+
+    // Initialize with default settings
+    modeSelect.selectedIndex = 1; // Default to Ionian (major)
+
+    // Initialize the canvas context for chord highlighting
+    const ctx = redCanvas.getContext('2d');
+    const highlighter = new ChordHighlighter(ctx);
+
+    // Map of scale degrees for each mode
+    const SCALE_DEGREE_TRIADS = {
+      'ionian (major)': ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
+      'aeolian (minor)': ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
+      'dorian': ['i', 'ii', 'bIII', 'IV', 'v', 'vi°', 'bVII'],
+      'phrygian': ['i', 'bII', 'bIII', 'iv', 'v°', 'bVI', 'bVII'],
+      'lydian': ['I', 'II', 'iii', '#iv°', 'V', 'vi', 'vii'],
+      'mixolydian': ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'bVII'],
+      'locrian': ['i°', 'bII', 'biii', 'iv', 'bV', 'bVI', 'bVII']
+    };
+
+    // Chord offset in circle of fifths based on mode
+    // This defines how many positions to rotate the chord names for each mode
+    const modeChordOffset = {
+      'ionian (major)': 0,
+      'aeolian (minor)': 9, // Rotate to A minor from C major (9 steps counterclockwise)
+      'dorian': 10,         // Rotate to D dorian from C major
+      'phrygian': 11,       // Rotate to E phrygian from C major
+      'lydian': 11,         // Rotate to F lydian from C major
+      'mixolydian': 10,     // Rotate to G mixolydian from C major
+      'locrian': 8          // Rotate to B locrian from C major
+    };
+
+    // Calculate Roman numerals for given key and mode
+    function getRomanNumerals(key, mode) {
+      // Find the index of the key in the circle
+      const keyIndex = CIRCLE_POSITIONS[RING.MAJOR].findIndex(chordName => {
+        if (chordName.includes('/')) {
+          return chordName.split('/').includes(key);
+        }
+        return chordName === key;
+      });
+
+      if (keyIndex === -1) return null;
+
+      // Calculate offset based on key and mode
+      let offset = (keyIndex - modeChordOffset[mode]) % 12;
+      if (offset < 0) offset += 12;
+
+      // Rotate the scale degrees based on the offset
+      const scaleDegrees = [...SCALE_DEGREE_TRIADS[mode]];
+
+      // Map each position to corresponding scale degree
+      const romanMap = {};
+
+      // Major chords
+      for (let i = 0; i < 12; i++) {
+        const posIndex = (i + offset) % 12;
+        romanMap[`${RING.MAJOR}-${i}`] = scaleDegrees[posIndex % 7];
+      }
+
+      // Minor chords - for simplicity, use the same pattern shifted by relative minor
+      for (let i = 0; i < 12; i++) {
+        const posIndex = (i + offset + 9) % 12; // +9 for relative minor
+        romanMap[`${RING.MINOR}-${i}`] = scaleDegrees[posIndex % 7];
+      }
+
+      // Diminished chords - simplified approach
+      for (let i = 0; i < 12; i++) {
+        const posIndex = (i + offset + 6) % 12; // +6 for diminished positioning
+        romanMap[`${RING.DIMINISHED}-${i}`] = scaleDegrees[posIndex % 7];
+      }
+
+      return romanMap;
     }
 
-    // Patch drag logic to update key dropdown and polygon (mode stays the same)
-    let lastStartSegment = startSegment;
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        redCanvas.classList.remove('dragging');
-        document.body.style.userSelect = '';
-        // Wrap startSegment
-        if (startSegment < -1) startSegment = 10;
-        if (startSegment > 10) startSegment = -1;
-        if (startSegment !== lastStartSegment) {
-          updateKeyDropdownFromPolygon();
-          lastStartSegment = startSegment;
+    // Create and position chord labels in the circle
+    function createChordLabels() {
+      // Clear existing labels
+      chordLabelsContainer.innerHTML = '';
+
+      // Calculate Roman numerals if needed
+      const romanMap = state.showRomanNumerals ? getRomanNumerals(state.key, state.mode) : null;
+
+      // Loop through all chord positions
+      Object.values(RING).forEach(ring => {
+        for (let i = 0; i < 12; i++) {
+          const chordName = getChordNameAtPosition(ring, i);
+          const { angle, radius } = getChordPolarCoordinates(ring, i);
+          const coords = polarToCartesian(angle, radius);
+
+          // Create label element
+          const label = document.createElement('div');
+          label.className = `label ${ring}`;
+
+          // Set label text based on mode (chord name or Roman numeral)
+          if (state.showRomanNumerals && romanMap) {
+            const romanId = `${ring}-${i}`;
+            label.textContent = romanMap[romanId] || chordName;
+          } else {
+            label.textContent = chordName;
+          }
+
+          // Position the label
+          label.style.left = `${coords.x}px`;
+          label.style.top = `${coords.y}px`;
+
+          // Highlight the tonic key if this is it
+          if (ring === RING.MAJOR && chordName === state.key ||
+              chordName.includes('/') && chordName.split('/').includes(state.key)) {
+            label.classList.add('highlighted-key');
+          }
+
+          // Add to container
+          chordLabelsContainer.appendChild(label);
         }
+      });
+    }
+
+    // Update the circle when key or mode changes
+    function updateCircle() {
+      createChordLabels();
+      updateChordProgression();
+    }
+
+    // Update chord progression display
+    function updateChordProgression() {
+      // Simplified implementation - just show selected chords
+      const chordNames = highlighter.selectedChords.map(pos => {
+        return getChordNameAtPosition(pos.ring, pos.index);
+      });
+
+      chordProgressionField.value = chordNames.join(' - ');
+    }
+
+    // Initialize the circle
+    createChordLabels();
+
+    // Configure highlighter style
+    highlighter.outlineColor = 'rgba(255, 0, 0, 0.8)';
+    highlighter.outlineWidth = 4;
+
+    // Clear any previous highlights
+    ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+
+    // Initialize empty chord progression field
+    updateChordProgression();
+
+    // Add click handler for selecting chords
+    redCanvas.addEventListener('click', function(e) {
+      const rect = redCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Calculate distance from center
+      const dx = x - highlighter.centerX;
+      const dy = y - highlighter.centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Determine which ring was clicked
+      let ring;
+      if (distance > 130 && distance < 165) {
+        ring = RING.MAJOR;
+      } else if (distance > 90 && distance < 130) {
+        ring = RING.MINOR;
+      } else if (distance > 50 && distance < 90) {
+        ring = RING.DIMINISHED;
+      } else {
+        return; // Click not in any ring
+      }
+
+      // Calculate angle and convert to index
+      let angle = Math.atan2(-dy, dx);
+      // Convert to angle from 12 o'clock position, clockwise
+      angle = Math.PI/2 - angle;
+      if (angle < 0) angle += 2 * Math.PI;
+
+      // Convert angle to index (0-11)
+      const index = Math.floor((angle / (2 * Math.PI)) * 12) % 12;
+
+      // Toggle chord selection
+      const existingIndex = highlighter.selectedChords.findIndex(
+        pos => pos.ring === ring && pos.index === index
+      );
+
+      if (existingIndex !== -1) {
+        highlighter.selectedChords.splice(existingIndex, 1);
+      } else {
+        highlighter.addChordByPosition(ring, index);
+      }
+
+      // Redraw highlights
+      ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
+      highlighter.drawHighlightsWithPath();
+
+      // Update chord progression display
+      updateChordProgression();
+    });
+
+    // Add event listeners for UI controls
+    modeSelect.addEventListener('change', function() {
+      // Map the selected mode name to internal representation
+      state.mode = modeNameMap[this.value];
+      updateCircle();
+    });
+
+    keySelect.addEventListener('change', function() {
+      state.key = this.value;
+      updateCircle();
+    });
+
+    // Roman numeral toggle
+    romanToggle.addEventListener('click', function(e) {
+      if (e.target.tagName === 'SPAN') {
+        // Update active state
+        romanToggle.querySelectorAll('span').forEach(span => {
+          span.classList.remove('active');
+        });
+        e.target.classList.add('active');
+
+        // Update state
+        state.showRomanNumerals = (e.target.id === 'roman-roman');
+
+        // Update circle
+        updateCircle();
       }
     });
 
-    // Set initial polygon position for default key and mode
-    updatePolygonForKeyAndMode();
+    // Clear button for chord progression
+    document.getElementById('clear-drawings').addEventListener('click', function() {
+      // Clear all selected chords
+      highlighter.clearAll();
 
-    // Draw labels at startup only (and when toggling Roman numerals)
-    drawLabels();
-
-    function drawBothPolygons() {
-      // Clear canvas once before drawing both polygons
+      // Clear canvas
       ctx.clearRect(0, 0, redCanvas.width, redCanvas.height);
-      // Calculate Lydian start segment for current key
-      let ionianStartSegment = startSegment;
-      // Adjust to Lydian position (mode index 3)
-      ionianStartSegment = (startSegment - modeOffsets[currentModeIndex] + modeOffsets[3] + 12) % 12;
-      if (ionianStartSegment > 10) ionianStartSegment -= 12;
-      // Draw blue polygon first (so it appears behind)
-      drawRedOverlay(ionianStartSegment-3, 9, 'blue', 7, true);
-      // Draw red polygon on top
-      drawRedOverlay(startSegment, 3, 'red', 1);
-      drawAllArrows();
-    }
 
-    // Initial draw of both polygons
-    drawBothPolygons();
-
-    // Update clear drawings to also clear progression
-    document.getElementById('clear-drawings').onclick = function() {
-      arrows = [];
-      clearArrowCanvas();
-      drawLabels();
-      chordProgression = [];
-      romanProgression = [];
-      updateChordProgressionDisplay();
-    };
-
-    // Update draw mode toggle to clear progression when switching modes
-    drawNormal.onclick = function() {
-      if (drawArrowMode) {
-        drawArrowMode = false;
-        drawNormal.classList.add('active');
-        drawDrawing.classList.remove('active');
-        const redCanvas = document.getElementById('red-canvas');
-        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
-        document.querySelectorAll('.label').forEach(label => {
-          label.style.cursor = '';
-          label.removeEventListener('click', arrowLabelClick, {capture: true});
-        });
-        // Reset drawing state but keep arrows
-        arrowStep = 0;
-        arrowFrom = null;
-        document.querySelectorAll('.label').forEach(unhighlightLabel);
-        arrowLabels = [];
-        // Clear progression when exiting drawing mode
-        chordProgression = [];
-        romanProgression = [];
-        updateChordProgressionDisplay();
-      }
-    };
+      // Update chord progression display
+      updateChordProgression();
+    });
   </script>
 </body>
 </html>
