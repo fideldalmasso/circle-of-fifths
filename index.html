@@ -203,6 +203,10 @@
     </button>
   </div>
 
+  <!-- Add text field for chord progression -->
+  <div style="margin-top: 20px; width: 80%; max-width: 600px;">
+    <input type="text" id="chord-progression" readonly style="width: 100%; padding: 8px; font-size: 16px; text-align: center; border: 1px solid #ccc; border-radius: 4px;">
+  </div>
 
   <script>
     // --- Key Mapping Setup (define at the very top) ---
@@ -237,9 +241,11 @@
     const minors = ['Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'B♭m', 'Fm', 'Cm', 'Gm', 'Dm'];
     const dims   = ['B°','F♯°','C♯°','G♯°','D♯°','A♯°','E♯°','C°','G°','D°','A°','E°'];
 
+    // Update the Roman numeral arrays to match the circle of fifths order
+    // Order: C, G, D, A, E, B, Gb, Db, Ab, Eb, Bb, F
     const majors_roman = ['I', 'V', 'II', 'VI', 'III', 'VII', 'bV', 'bII', 'bVI', 'bIII', 'bVII', 'IV'];
     const minors_roman = ['vi', 'iii', 'vii', 'iv#', 'i#', 'vi#', 'biii', 'bvii', 'iv', 'i', 'v', 'ii'];
-    const dims_roman = ['vii°', 'iv#°', 'i#°', 'v#°', 'vi#°', 'biii°', 'bvii°', 'iv°', 'i°', 'v°', 'ii°', 'vi°', 'iii°'];
+    const dims_roman = ['vii°', 'iv#°', 'i#°', 'v#°', 'vi#°', 'biii°', 'bvii°', 'iv°', 'i°', 'v°', 'ii°', 'vi°'];
 
     const circle = document.getElementById('circle');
     const info = document.getElementById('info');
@@ -365,6 +371,8 @@
         });
         arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
         drawAllArrows();
+        // Update chord progression display to show chord names
+        updateChordProgressionDisplay();
       }
     };
     romanRoman.onclick = function() {
@@ -388,6 +396,8 @@
         });
         arrows = arrowIndices.map(([fromIdx, toIdx, curveSeed]) => [allLabels[fromIdx], allLabels[toIdx], curveSeed]);
         drawAllArrows();
+        // Update chord progression display to show Roman numerals
+        updateChordProgressionDisplay();
       }
     };
 
@@ -407,7 +417,10 @@
         arrowStep = 0;
         arrowFrom = null;
         document.querySelectorAll('.label').forEach(unhighlightLabel);
-        arrowLabels = [];
+        // Clear progression when exiting drawing mode
+        chordProgression = [];
+        romanProgression = [];
+        updateChordProgressionDisplay();
       }
     };
     drawDrawing.onclick = function() {
@@ -427,6 +440,10 @@
           label.style.cursor = 'pointer';
           label.addEventListener('click', arrowLabelClick, {capture: true});
         });
+        // Reset progressions and ensure text field is cleared
+        chordProgression = [];
+        romanProgression = [];
+        chordProgressionField.value = '';
         // Redraw all arrows
         drawAllArrows();
       }
@@ -645,15 +662,68 @@
       arrowLabels = [];
     }
 
+    // Add variables to store chord progression data
+    let chordProgression = [];
+    let romanProgression = [];
+    const chordProgressionField = document.getElementById('chord-progression');
+
+    function updateChordProgressionDisplay() {
+      // Show either chord names or Roman numerals based on the current mode
+      const displayText = useRoman ? romanProgression.join(' - ') : chordProgression.join(' - ');
+      chordProgressionField.value = displayText;
+    }
+
+    function getRomanNumeral(labelText, isMajor) {
+      // Get the current key
+      const currentKey = keySelect.value;
+
+      // Define the Roman numeral mapping for each key
+      const romanMap = {
+        'C': { 'C': 'I', 'G': 'V', 'D': 'II', 'A': 'VI', 'E': 'III', 'B': 'VII', 'Gb': 'bV', 'Db': 'bII', 'Ab': 'bVI', 'Eb': 'bIII', 'Bb': 'bVII', 'F': 'IV' },
+        'G': { 'G': 'I', 'D': 'V', 'A': 'II', 'E': 'VI', 'B': 'III', 'Gb': 'VII', 'Db': 'bV', 'Ab': 'bII', 'Eb': 'bVI', 'Bb': 'bIII', 'F': 'bVII', 'C': 'IV' },
+        'D': { 'D': 'I', 'A': 'V', 'E': 'II', 'B': 'VI', 'Gb': 'III', 'Db': 'VII', 'Ab': 'bV', 'Eb': 'bII', 'Bb': 'bVI', 'F': 'bIII', 'C': 'bVII', 'G': 'IV' },
+        'A': { 'A': 'I', 'E': 'V', 'B': 'II', 'Gb': 'VI', 'Db': 'III', 'Ab': 'VII', 'Eb': 'bV', 'Bb': 'bII', 'F': 'bVI', 'C': 'bIII', 'G': 'bVII', 'D': 'IV' },
+        'E': { 'E': 'I', 'B': 'V', 'Gb': 'II', 'Db': 'VI', 'Ab': 'III', 'Eb': 'VII', 'Bb': 'bV', 'F': 'bII', 'C': 'bVI', 'G': 'bIII', 'D': 'bVII', 'A': 'IV' },
+        'B': { 'B': 'I', 'Gb': 'V', 'Db': 'II', 'Ab': 'VI', 'Eb': 'III', 'Bb': 'VII', 'F': 'bV', 'C': 'bII', 'G': 'bVI', 'D': 'bIII', 'A': 'bVII', 'E': 'IV' },
+        'Gb': { 'Gb': 'I', 'Db': 'V', 'Ab': 'II', 'Eb': 'VI', 'Bb': 'III', 'F': 'VII', 'C': 'bV', 'G': 'bII', 'D': 'bVI', 'A': 'bIII', 'E': 'bVII', 'B': 'IV' },
+        'Db': { 'Db': 'I', 'Ab': 'V', 'Eb': 'II', 'Bb': 'VI', 'F': 'III', 'C': 'VII', 'G': 'bV', 'D': 'bII', 'A': 'bVI', 'E': 'bIII', 'B': 'bVII', 'Gb': 'IV' },
+        'Ab': { 'Ab': 'I', 'Eb': 'V', 'Bb': 'II', 'F': 'VI', 'C': 'III', 'G': 'VII', 'D': 'bV', 'A': 'bII', 'E': 'bVI', 'B': 'bIII', 'Gb': 'bVII', 'Db': 'IV' },
+        'Eb': { 'Eb': 'I', 'Bb': 'V', 'F': 'II', 'C': 'VI', 'G': 'III', 'D': 'VII', 'A': 'bV', 'E': 'bII', 'B': 'bVI', 'Gb': 'bIII', 'Db': 'bVII', 'Ab': 'IV' },
+        'Bb': { 'Bb': 'I', 'F': 'V', 'C': 'II', 'G': 'VI', 'D': 'III', 'A': 'VII', 'E': 'bV', 'B': 'bII', 'Gb': 'bVI', 'Db': 'bIII', 'Ab': 'bVII', 'Eb': 'IV' },
+        'F': { 'F': 'I', 'C': 'V', 'G': 'II', 'D': 'VI', 'A': 'III', 'E': 'VII', 'B': 'bV', 'Gb': 'bII', 'Db': 'bVI', 'Ab': 'bIII', 'Eb': 'bVII', 'Bb': 'IV' }
+      };
+
+      // Get the base chord name (remove 'm' or '°' for lookup)
+      const baseChord = labelText.replace(/[m°]/g, '');
+
+      // Get the Roman numeral for the major chord
+      let romanNum = romanMap[currentKey][baseChord];
+
+      // Adjust for minor or diminished
+      if (labelText.includes('m')) {
+        romanNum = romanNum.toLowerCase();
+      } else if (labelText.includes('°')) {
+        romanNum = romanNum + '°';
+      }
+
+      return romanNum;
+    }
+
     function arrowLabelClick(e) {
       e.stopPropagation();
       const label = e.currentTarget;
+      const labelText = label.textContent;
+      const isMajor = label.classList.contains('major');
+
       if (arrowStep === 0) {
         // Only reset the drawing state, not the arrows
         arrowStep = 0;
         arrowFrom = null;
         document.querySelectorAll('.label').forEach(unhighlightLabel);
         arrowLabels = [];
+        // Reset progressions
+        chordProgression = [];
+        romanProgression = [];
         // Redraw existing arrows
         drawAllArrows();
 
@@ -661,6 +731,12 @@
         arrowLabels = [label];
         arrowFrom = label;
         arrowStep = 1;
+
+        // Add first chord to progression
+        chordProgression.push(labelText);
+        const romanNum = getRomanNumeral(labelText, isMajor);
+        romanProgression.push(romanNum);
+        updateChordProgressionDisplay();
       } else if (arrowStep === 1 && label !== arrowFrom) {
         highlightLabel(label);
         arrowLabels.push(label);
@@ -672,6 +748,12 @@
         arrowFrom = label;
         arrowStep = 1;
         arrowLabels = [arrowFrom];
+
+        // Add next chord to progression
+        chordProgression.push(labelText);
+        const romanNum = getRomanNumeral(labelText, isMajor);
+        romanProgression.push(romanNum);
+        updateChordProgressionDisplay();
       }
     }
 
@@ -800,25 +882,39 @@
     // Initial draw of both polygons
     drawBothPolygons();
 
-    // Clear all drawings
+    // Update clear drawings to also clear progression
     document.getElementById('clear-drawings').onclick = function() {
       arrows = [];
       clearArrowCanvas();
       drawLabels();
+      chordProgression = [];
+      romanProgression = [];
+      updateChordProgressionDisplay();
     };
 
-    // When clicking a label in drawing mode, add an arrow
-    function handleLabelClick(label) {
-      if (!drawArrowMode) return;
-      const key = label.getAttribute('data-key');
-      const mode = label.getAttribute('data-mode');
-      arrows.push({ from: { key, mode } });
-      if (arrows.length === 2) {
-        drawLabels(); // Redraw with the new arrow
-        drawAllArrows();
-        arrows = []; // Reset for next arrow
+    // Update draw mode toggle to clear progression when switching modes
+    drawNormal.onclick = function() {
+      if (drawArrowMode) {
+        drawArrowMode = false;
+        drawNormal.classList.add('active');
+        drawDrawing.classList.remove('active');
+        const redCanvas = document.getElementById('red-canvas');
+        if (redCanvas) redCanvas.style.pointerEvents = 'auto';
+        document.querySelectorAll('.label').forEach(label => {
+          label.style.cursor = '';
+          label.removeEventListener('click', arrowLabelClick, {capture: true});
+        });
+        // Reset drawing state but keep arrows
+        arrowStep = 0;
+        arrowFrom = null;
+        document.querySelectorAll('.label').forEach(unhighlightLabel);
+        arrowLabels = [];
+        // Clear progression when exiting drawing mode
+        chordProgression = [];
+        romanProgression = [];
+        updateChordProgressionDisplay();
       }
-    }
+    };
   </script>
 </body>
 </html>
