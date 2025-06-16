@@ -31,6 +31,7 @@
     .fill.major       { width: 330px; height: 330px; background: #d0f0d0; }
     .fill.minor       { width: 260px; height: 260px; background: #d0e8ff; }
     .fill.diminished  { width: 180px; height: 180px; background: #fce0ec; }
+    .fill.center      { width: 100px; height: 100px; background: white; z-index: 6; }
 
     .ring {
       border: 1px solid black;
@@ -177,6 +178,9 @@
     <div class="layer ring major"></div>
     <div class="layer ring minor"></div>
     <div class="layer ring diminished"></div>
+
+    <!-- White center circle -->
+    <div class="layer fill center"></div>
 
     <!-- Red overlay (HTML/CSS only) -->
     <canvas id="red-canvas" width="380" height="380"></canvas>
