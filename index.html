@@ -565,18 +565,18 @@
     }
 
     function drawAllArrows() {
-      const lightGreen = [120, 255, 120];
-      const darkGreen = [0, 100, 0];
+      const darkOrange = [200, 100, 0];  // Dark orange
+      const lightOrange = [255, 200, 100];  // Light orange
       arrows.forEach(([fromEl, toEl, curveSeed], i) => {
         const t = arrows.length > 1 ? i / (arrows.length - 1) : 0;
-        const colorArr = lerpColor(lightGreen, darkGreen, t);
+        const colorArr = lerpColor(darkOrange, lightOrange, t);
         const color = `rgb(${colorArr[0]},${colorArr[1]},${colorArr[2]})`;
         drawArrow(fromEl, toEl, false, color, curveSeed);
       });
     }
 
     function highlightLabel(labelEl) {
-      labelEl.style.boxShadow = '0 0 0 4px #0f0, 0 0 10px 4px #0f08';
+      labelEl.style.boxShadow = '0 0 0 4px #ff8c00, 0 0 10px 4px #ff8c0088';
       labelEl.style.borderRadius = '50%';
       labelEl.style.zIndex = 21;
     }
